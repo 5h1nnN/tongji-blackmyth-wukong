@@ -14,11 +14,11 @@
 
 [童文景](https://github.com/Double-Cloth)
 
-[魏世杰](#)
+[魏世杰](https://github.com/WuAnTheShy)
 
-[闫容浩](#)
+[闫容浩](https://github.com/Yepiphany)
 
-## 3	参考文档
+## 3	学习
 
 1. [虚幻引擎上手](https://www.youtube.com/watch?v=1XjgLKrb4_M)
 
