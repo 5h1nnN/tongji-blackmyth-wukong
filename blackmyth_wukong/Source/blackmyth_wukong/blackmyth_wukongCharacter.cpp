@@ -10,6 +10,9 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
+// [新增] 引入动画相关头文件
+#include "Animation/AnimMontage.h"
+#include "Animation/AnimInstance.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
@@ -20,7 +23,7 @@ Ablackmyth_wukongCharacter::Ablackmyth_wukongCharacter()
 {
 	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
-		
+
 	// Don't rotate when the controller rotates. Let that just affect the camera.
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
@@ -73,10 +76,10 @@ void Ablackmyth_wukongCharacter::SetupPlayerInputComponent(UInputComponent* Play
 			Subsystem->AddMappingContext(DefaultMappingContext, 0);
 		}
 	}
-	
+
 	// Set up action bindings
 	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent)) {
-		
+
 		// Jumping
 		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Started, this, &ACharacter::Jump);
 		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
@@ -86,6 +89,13 @@ void Ablackmyth_wukongCharacter::SetupPlayerInputComponent(UInputComponent* Play
 
 		// Looking
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &Ablackmyth_wukongCharacter::Look);
+
+		// [新增] Attacking - 绑定攻击事件
+		// 注意：这里加了一个判断，确保你在蓝图里设置了 AttackAction，否则不会绑定
+		if (AttackAction)
+		{
+			EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Started, this, &Ablackmyth_wukongCharacter::Attack);
+		}
 	}
 	else
 	{
@@ -106,7 +116,7 @@ void Ablackmyth_wukongCharacter::Move(const FInputActionValue& Value)
 
 		// get forward vector
 		const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
-	
+
 		// get right vector 
 		const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
 
@@ -126,5 +136,30 @@ void Ablackmyth_wukongCharacter::Look(const FInputActionValue& Value)
 		// add yaw and pitch input to controller
 		AddControllerYawInput(LookAxisVector.X);
 		AddControllerPitchInput(LookAxisVector.Y);
+	}
+}
+
+// [新增] 攻击函数实现
+void Ablackmyth_wukongCharacter::Attack(const FInputActionValue& Value)
+{
+	// 1. 确保在蓝图中分配了 AttackMontage
+	if (AttackMontage)
+	{
+		// 2. 获取角色的动画实例 (Anim Instance)
+		UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+		if (AnimInstance)
+		{
+			// 3. 播放蒙太奇
+			// 只有当该蒙太奇当前没有播放时才播放（防止连点时鬼畜，如果你要做连招系统，这里逻辑会更复杂）
+			if (!AnimInstance->Montage_IsPlaying(AttackMontage))
+			{
+				AnimInstance->Montage_Play(AttackMontage, 1.0f);
+			}
+		}
+	}
+	else
+	{
+		// 调试信息：如果你按了攻击键但没反应，看看输出日志里有没有这句话
+		UE_LOG(LogTemplateCharacter, Warning, TEXT("Attack Montage not assigned in Character Blueprint!"));
 	}
 }
