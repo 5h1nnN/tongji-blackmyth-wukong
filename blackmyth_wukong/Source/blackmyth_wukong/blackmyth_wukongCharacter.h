@@ -48,6 +48,10 @@ class Ablackmyth_wukongCharacter : public ACharacter
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* LookAction;
 
+	// --- [新增] 奔跑输入 ---
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	UInputAction* SprintAction;
+
 	// --- 战斗输入动作 ---
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
@@ -106,12 +110,29 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
 	TSubclassOf<class UUserWidget> GameOverWidgetClass;
 
+	// --- [新增] 移动参数 ---
+
+	/** 正常行走速度 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	float WalkSpeed;
+
+	/** 奔跑速度 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	float SprintSpeed;
+
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
 	virtual void Die();
 
 protected:
+	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+	virtual void BeginPlay();
+
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
+
+	// --- [新增] 奔跑处理 ---
+	void Sprint();
+	void StopSprinting();
 
 	// --- 战斗处理 ---
 	void PerformLightAttack(const FInputActionValue& Value);
@@ -125,10 +146,6 @@ protected:
 
 	/** 重置闪避的"冷却"状态 (恢复再次闪避的能力) */
 	void ResetDodgeCooldown();
-
-protected:
-	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
-	virtual void BeginPlay();
 
 public:
 	FORCEINLINE class USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
@@ -146,6 +163,8 @@ private:
 	FTimerHandle DodgeCooldownTimer;
 
 	// --- 死亡状态管理 ---
-	/** [核心] 防止连续调用 Die() 导致动画鬼畜 */
 	bool bIsDead;
+
+	// --- 奔跑状态 ---
+	bool bIsSprinting;
 };

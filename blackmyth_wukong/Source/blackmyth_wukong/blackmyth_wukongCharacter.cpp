@@ -39,12 +39,19 @@ Ablackmyth_wukongCharacter::Ablackmyth_wukongCharacter()
 
 	GetCharacterMovement()->JumpZVelocity = 700.f;
 	GetCharacterMovement()->AirControl = 0.35f;
-	GetCharacterMovement()->MaxWalkSpeed = 500.f;
 	GetCharacterMovement()->MinAnalogWalkSpeed = 20.f;
 
 	// [默认参数] 正常行走的刹车阻尼
 	GetCharacterMovement()->BrakingDecelerationWalking = 2000.f;
 	GetCharacterMovement()->BrakingDecelerationFalling = 1500.0f;
+
+	// [新增] 速度配置初始化
+	WalkSpeed = 500.0f;
+	SprintSpeed = 900.0f;
+	bIsSprinting = false;
+
+	// 应用默认速度
+	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
 
 	// Create a camera boom 
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
@@ -70,10 +77,9 @@ Ablackmyth_wukongCharacter::Ablackmyth_wukongCharacter()
 	// [初始化] 冷却参数
 	bDodgeOnCooldown = false;
 	DodgeCooldownTime = 0.5f;
-	DodgePlayRate = 1.3f; // 建议根据动画实际速度微调，越快滑动时间越短
+	DodgePlayRate = 1.3f;
 
 	// [修改] 提高默认冲刺力度
-	// 由于我们现在加大了闪避时的阻尼(8000)，需要很大的力才能推出去
 	DodgeStrength = 770.0f;
 }
 
@@ -82,6 +88,15 @@ void Ablackmyth_wukongCharacter::BeginPlay()
 	Super::BeginPlay();
 
 	CurrentHealth = MaxHealth;
+
+	// 确保开始游戏时速度正确
+	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+
+	// 确保动画速率正常
+	if (GetMesh())
+	{
+		GetMesh()->GlobalAnimRateScale = 1.0f;
+	}
 
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 	{
@@ -111,6 +126,14 @@ void Ablackmyth_wukongCharacter::SetupPlayerInputComponent(UInputComponent* Play
 
 		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &Ablackmyth_wukongCharacter::Move);
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &Ablackmyth_wukongCharacter::Look);
+
+		// [新增] 奔跑绑定
+		if (SprintAction)
+		{
+			EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Started, this, &Ablackmyth_wukongCharacter::Sprint);
+			EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Completed, this, &Ablackmyth_wukongCharacter::StopSprinting);
+			EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Canceled, this, &Ablackmyth_wukongCharacter::StopSprinting);
+		}
 
 		// 战斗绑定
 		if (LightAttackAction)
@@ -167,6 +190,41 @@ void Ablackmyth_wukongCharacter::Look(const FInputActionValue& Value)
 }
 
 // -------------------------------------------------------------------------
+// [新增] 奔跑系统
+// -------------------------------------------------------------------------
+
+void Ablackmyth_wukongCharacter::Sprint()
+{
+	// 死亡、闪避中、攻击中、或者正在坠落时不允许开启奔跑
+	if (bIsDead || bIsDodging || bIsAttacking) return;
+
+	bIsSprinting = true;
+	GetCharacterMovement()->MaxWalkSpeed = SprintSpeed;
+
+	// --- [核心修改] 纯C++控制动画速率 ---
+	// 计算加速比率 (例如 800/500 = 1.6倍)
+	// 加上 KINDA_SMALL_NUMBER 防止除以0 (虽然构造函数里已经赋值了)
+	float SpeedRatio = SprintSpeed / (WalkSpeed > KINDA_SMALL_NUMBER ? WalkSpeed : 500.0f);
+
+	if (GetMesh())
+	{
+		GetMesh()->GlobalAnimRateScale = SpeedRatio;
+	}
+}
+
+void Ablackmyth_wukongCharacter::StopSprinting()
+{
+	bIsSprinting = false;
+	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+
+	// --- [核心修改] 恢复正常动画速率 ---
+	if (GetMesh())
+	{
+		GetMesh()->GlobalAnimRateScale = 1.0f;
+	}
+}
+
+// -------------------------------------------------------------------------
 // [战斗系统]
 // -------------------------------------------------------------------------
 
@@ -174,6 +232,9 @@ void Ablackmyth_wukongCharacter::PerformLightAttack(const FInputActionValue& Val
 {
 	if (bIsDead || bIsDodging) return;
 	if (LightAttackMontages.Num() == 0) return;
+
+	// 攻击时强制停止奔跑 (这会自动调用 StopSprinting 恢复动画速率为 1.0)
+	StopSprinting();
 
 	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
 	if (!AnimInstance) return;
@@ -199,6 +260,9 @@ void Ablackmyth_wukongCharacter::PerformHeavyAttack(const FInputActionValue& Val
 {
 	if (bIsDead || bIsDodging || !HeavyAttackMontage) return;
 
+	// 攻击时强制停止奔跑
+	StopSprinting();
+
 	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
 	if (!AnimInstance) return;
 
@@ -216,41 +280,45 @@ void Ablackmyth_wukongCharacter::ResetCombo()
 	bIsAttacking = false;
 }
 
-// [修改] 完美匹配动画时长与物理滑行
 void Ablackmyth_wukongCharacter::PerformDodge(const FInputActionValue& Value)
 {
 	if (bIsDead || bIsDodging || bDodgeOnCooldown || !DodgeAnimSequence) return;
+
+	// 闪避时停止奔跑状态
+	StopSprinting();
 
 	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
 	if (!AnimInstance) return;
 
 	// --- 1. 计算闪避方向 ---
-	FVector FinalDodgeDir;
 	FVector InputDir = GetLastMovementInputVector();
+	FVector FinalDodgeDir;
 
 	if (InputDir.IsNearlyZero())
 	{
-		// 无输入则后撤
 		FinalDodgeDir = GetActorForwardVector();
 	}
 	else
 	{
-		// 有输入则按输入方向
 		FinalDodgeDir = InputDir.GetSafeNormal();
 	}
 
-	// --- 2. 物理状态重置 (关键步骤) ---
-	// 彻底清除之前的跑步速度，避免惯性叠加
-	GetCharacterMovement()->Velocity = FVector::ZeroVector;
-	GetCharacterMovement()->StopMovementImmediately();
+	// --- 2. 物理状态重置 (修复空中定身 BUG) ---
+	bool bIsFalling = GetCharacterMovement()->IsFalling();
 
-	// [核心修改 A] 临时大幅提高刹车阻尼
-	// 让角色在冲刺后能迅速停下，而不是像冰面一样滑很远
-	// 8000.0f 是一个比较强的值，配合 4000.0f 的 DodgeStrength
-	//GetCharacterMovement()->BrakingDecelerationWalking = 0.0f;
-	// 坏文明：消除了摩擦力，导致像在溜冰
-	GetCharacterMovement()->GroundFriction = 0.0f;
-	GetCharacterMovement()->BrakingDecelerationWalking = 0.0f;
+	if (bIsFalling)
+	{
+		FVector CurrentVel = GetCharacterMovement()->Velocity;
+		GetCharacterMovement()->Velocity = FVector(0.f, 0.f, CurrentVel.Z);
+	}
+	else
+	{
+		GetCharacterMovement()->Velocity = FVector::ZeroVector;
+		GetCharacterMovement()->StopMovementImmediately();
+
+		GetCharacterMovement()->GroundFriction = 0.0f;
+		GetCharacterMovement()->BrakingDecelerationWalking = 0.0f;
+	}
 
 	// --- 3. 播放动画 ---
 	ResetCombo();
@@ -266,12 +334,10 @@ void Ablackmyth_wukongCharacter::PerformDodge(const FInputActionValue& Value)
 
 	float AnimDuration = DodgeAnimSequence->GetPlayLength() / DodgePlayRate;
 
-	// 动画结束时调用 ResetDodgeState
 	GetWorldTimerManager().SetTimer(DodgeResetTimer, this, &Ablackmyth_wukongCharacter::ResetDodgeState, AnimDuration, false);
 	GetWorldTimerManager().SetTimer(DodgeCooldownTimer, this, &Ablackmyth_wukongCharacter::ResetDodgeCooldown, DodgeCooldownTime, false);
 
 	// --- 5. 施加爆发力 ---
-	// 使用覆盖模式 (Override)，确保力道准确
 	LaunchCharacter(FinalDodgeDir * DodgeStrength, true, true);
 }
 
@@ -281,12 +347,8 @@ void Ablackmyth_wukongCharacter::ResetDodgeState()
 
 	bIsDodging = false;
 
-	// [核心修改 B] 动画结束瞬间，强制刹车
-	// 确保"动画停，脚就停"，解决滑步过头的问题
-	GetCharacterMovement()->StopMovementImmediately();
-
-	// [核心修改 C] 恢复正常的刹车阻尼
-	// 恢复成构造函数里设置的 2000.0f，保证后续正常走路手感
+	// [核心修复] 恢复正常的物理参数
+	GetCharacterMovement()->GroundFriction = 8.0f;
 	GetCharacterMovement()->BrakingDecelerationWalking = 2000.0f;
 }
 
@@ -316,6 +378,9 @@ void Ablackmyth_wukongCharacter::Die()
 {
 	if (bIsDead) return;
 	bIsDead = true;
+
+	// 死亡停止一切动作
+	StopSprinting();
 
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 	{
