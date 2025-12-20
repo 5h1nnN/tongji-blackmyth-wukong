@@ -81,6 +81,10 @@ class Ablackmyth_wukongCharacter : public ACharacter
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Animation, meta = (AllowPrivateAccess = "true"))
 	UAnimSequence* SpecialSkillAnimSequence;
 
+	/** [新增] 受击动画序列 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Animation, meta = (AllowPrivateAccess = "true"))
+	UAnimSequence* HitReactAnimSequence;
+
 	/** 闪避动画序列 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Animation, meta = (AllowPrivateAccess = "true"))
 	UAnimSequence* DodgeAnimSequence;
@@ -116,11 +120,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
 	float DodgeStrength;
 
-	// --- [新增] 攻击判定参数 ---
+	// --- 攻击判定参数 ---
 
-	/** 攻击判定距离 (前方多少厘米) */
+	/** 普通攻击判定距离 (短) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|HitDetection")
 	float AttackRange;
+
+	/** 特殊技能攻击判定距离 (长) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|HitDetection")
+	float SkillAttackRange;
 
 	/** 攻击判定球体半径 (判定宽度) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|HitDetection")
@@ -183,9 +191,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Combat|Skill")
 	float GetSkillCooldownFraction() const;
 
-	// --- [新增] 蓝图可调用的攻击检测函数 (推荐在 Montage Notify 中调用) ---
+	/** 蓝图可调用的攻击检测函数 */
 	UFUNCTION(BlueprintCallable, Category = "Combat|HitDetection")
-	void CheckAttackHit();
+	void CheckAttackHit(float CurrentRange);
 
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
 	virtual void Die();
@@ -212,6 +220,9 @@ protected:
 
 	void ResetDodgeState();
 	void ResetDodgeCooldown();
+
+	// --- [新增] 受击状态恢复 ---
+	void ResetHitReactState();
 
 	// --- [RPG 保护函数] ---
 	void CheckLevelUp();
@@ -254,6 +265,10 @@ private:
 
 	// --- 奔跑状态 ---
 	bool bIsSprinting;
+
+	// --- [新增] 受击状态 ---
+	bool bIsHitReacting;
+	FTimerHandle HitReactResetTimer;
 
 	// --- Idle 状态管理 ---
 	double LastInputTime;

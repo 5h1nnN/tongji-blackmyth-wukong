@@ -17,7 +17,6 @@
 #include "Animation/AnimSequence.h" 
 #include "Blueprint/UserWidget.h" 
 #include "TimerManager.h"
-// [新增] 用于检测和伤害
 #include "Kismet/KismetSystemLibrary.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -68,15 +67,18 @@ Ablackmyth_wukongCharacter::Ablackmyth_wukongCharacter()
 	bIsDodging = false;
 	bIsDead = false;
 
+	// [新增] 受击状态初始化
+	bIsHitReacting = false;
+
 	bDodgeOnCooldown = false;
 	DodgeCooldownTime = 0.5f;
 	DodgePlayRate = 1.3f;
 	DodgeStrength = 770.0f;
 
-	// [新增] 攻击范围参数初始化
-	AttackRange = 150.0f;  // 攻击距离 1.5米
-	AttackRadius = 60.0f;  // 判定半径
-	bShowHitDebug = true;  // 默认开启Debug球，方便你看效果
+	AttackRange = 150.0f;
+	SkillAttackRange = 400.0f;
+	AttackRadius = 80.0f;
+	bShowHitDebug = true;
 
 	SkillCooldownTime = 5.0f;
 	bIsSkillOnCooldown = false;
@@ -118,7 +120,8 @@ void Ablackmyth_wukongCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	if (bIsDead || !IdleAnimSequence) return;
+	// 受击时也不播放 Idle
+	if (bIsDead || bIsHitReacting || !IdleAnimSequence) return;
 
 	double CurrentTime = GetWorld()->GetTimeSeconds();
 	bool bIsMoving = GetVelocity().SizeSquared() > 10.0f;
@@ -223,7 +226,8 @@ void Ablackmyth_wukongCharacter::Move(const FInputActionValue& Value)
 {
 	ResetIdleTimer();
 
-	if (bIsDead || bIsDodging || bIsAttacking) return;
+	// [修改] 增加 bIsHitReacting，受击时不可移动 (硬直)
+	if (bIsDead || bIsDodging || bIsAttacking || bIsHitReacting) return;
 
 	FVector2D MovementVector = Value.Get<FVector2D>();
 
@@ -263,7 +267,8 @@ void Ablackmyth_wukongCharacter::Sprint()
 {
 	ResetIdleTimer();
 
-	if (bIsDead || bIsDodging || bIsAttacking) return;
+	// [修改] 受击时不可奔跑
+	if (bIsDead || bIsDodging || bIsAttacking || bIsHitReacting) return;
 
 	bIsSprinting = true;
 	GetCharacterMovement()->MaxWalkSpeed = SprintSpeed;
@@ -287,48 +292,41 @@ void Ablackmyth_wukongCharacter::StopSprinting()
 }
 
 // -------------------------------------------------------------------------
-// [新增] 攻击判定与伤害逻辑
+// [攻击判定]
 // -------------------------------------------------------------------------
 
-void Ablackmyth_wukongCharacter::CheckAttackHit()
+void Ablackmyth_wukongCharacter::CheckAttackHit(float CurrentRange)
 {
 	if (bIsDead) return;
 
-	// 1. 定义起点和终点 (从角色位置向前方发射)
 	FVector Start = GetActorLocation();
-	FVector End = Start + (GetActorForwardVector() * AttackRange);
+	FVector End = Start + (GetActorForwardVector() * CurrentRange);
 
-	// 2. 要检测的对象类型 (Pawn 和 PhysicsBody)
 	TArray<TEnumAsByte<EObjectTypeQuery>> ObjectTypes;
 	ObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECC_Pawn));
 	ObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECC_PhysicsBody));
 	ObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECC_WorldDynamic));
 
-	// 3. 要忽略的 Actor (忽略自己)
 	TArray<AActor*> ActorsToIgnore;
 	ActorsToIgnore.Add(this);
 
-	// 4. 存储结果
 	TArray<FHitResult> OutHits;
 
-	// 5. 执行球形检测 (Sphere Trace)
 	bool bHit = UKismetSystemLibrary::SphereTraceMultiForObjects(
 		GetWorld(),
 		Start,
 		End,
 		AttackRadius,
 		ObjectTypes,
-		false, // bTraceComplex
+		false,
 		ActorsToIgnore,
-		bShowHitDebug ? EDrawDebugTrace::ForDuration : EDrawDebugTrace::None, // 调试绘制
+		bShowHitDebug ? EDrawDebugTrace::ForDuration : EDrawDebugTrace::None,
 		OutHits,
-		true // IgnoreSelf
+		true
 	);
 
-	// 6. 处理命中结果
 	if (bHit)
 	{
-		// 使用 Set 防止对同一个敌人造成多次伤害 (虽然 SphereTrace 本身通常一次返回一个 Hit per actor)
 		TSet<AActor*> HitActors;
 
 		for (const FHitResult& Hit : OutHits)
@@ -338,10 +336,8 @@ void Ablackmyth_wukongCharacter::CheckAttackHit()
 			{
 				HitActors.Add(HitActor);
 
-				// 计算伤害
 				float Damage = GetTotalAttackPower();
 
-				// 应用伤害 (UE 标准接口)
 				UGameplayStatics::ApplyDamage(
 					HitActor,
 					Damage,
@@ -351,8 +347,6 @@ void Ablackmyth_wukongCharacter::CheckAttackHit()
 				);
 
 				UE_LOG(LogTemplateCharacter, Log, TEXT("Hit Enemy: %s, Damage: %f"), *HitActor->GetName(), Damage);
-
-				// 这里可以添加命中特效 SpawnEmitterAtLocation...
 			}
 		}
 	}
@@ -366,7 +360,8 @@ void Ablackmyth_wukongCharacter::PerformLightAttack(const FInputActionValue& Val
 {
 	ResetIdleTimer();
 
-	if (bIsDead || bIsDodging) return;
+	// [修改] 受击时不可攻击
+	if (bIsDead || bIsDodging || bIsHitReacting) return;
 	if (LightAttackMontages.Num() == 0) return;
 
 	StopSprinting();
@@ -388,10 +383,12 @@ void Ablackmyth_wukongCharacter::PerformLightAttack(const FInputActionValue& Val
 		bIsAttacking = true;
 		ComboIndex++;
 
-		// [核心新增] 设置定时器在动作播放 0.2 秒后进行攻击判定
-		// 注意：最好的做法是在 Montage 中添加 Notify，这里用 Timer 模拟以便代码直接生效
+		// 使用 Lambda 传递 AttackRange
 		FTimerHandle HitCheckTimer;
-		GetWorldTimerManager().SetTimer(HitCheckTimer, this, &Ablackmyth_wukongCharacter::CheckAttackHit, 0.2f, false);
+		GetWorldTimerManager().SetTimer(HitCheckTimer, [this]()
+			{
+				CheckAttackHit(AttackRange);
+			}, 0.2f, false);
 
 		GetWorldTimerManager().ClearTimer(ComboResetTimer);
 		GetWorldTimerManager().SetTimer(ComboResetTimer, this, &Ablackmyth_wukongCharacter::ResetCombo, 1.2f, false);
@@ -402,7 +399,7 @@ void Ablackmyth_wukongCharacter::PerformHeavyAttack(const FInputActionValue& Val
 {
 	ResetIdleTimer();
 
-	if (bIsDead || bIsDodging || !HeavyAttackMontage) return;
+	if (bIsDead || bIsDodging || bIsHitReacting || !HeavyAttackMontage) return;
 
 	StopSprinting();
 
@@ -416,9 +413,11 @@ void Ablackmyth_wukongCharacter::PerformHeavyAttack(const FInputActionValue& Val
 		AnimInstance->StopAllMontages(0.2f);
 		AnimInstance->Montage_Play(HeavyAttackMontage);
 
-		// [核心新增] 重攻击稍慢一点判定 (0.4秒)
 		FTimerHandle HitCheckTimer;
-		GetWorldTimerManager().SetTimer(HitCheckTimer, this, &Ablackmyth_wukongCharacter::CheckAttackHit, 0.4f, false);
+		GetWorldTimerManager().SetTimer(HitCheckTimer, [this]()
+			{
+				CheckAttackHit(AttackRange);
+			}, 0.4f, false);
 
 		ResetCombo();
 	}
@@ -434,7 +433,8 @@ void Ablackmyth_wukongCharacter::PerformDodge(const FInputActionValue& Value)
 {
 	ResetIdleTimer();
 
-	if (bIsDead || bIsDodging || bDodgeOnCooldown || !DodgeAnimSequence) return;
+	// [修改] 受击时不可闪避 (除非你想做受击强制取消，这里默认是硬直状态不可闪避)
+	if (bIsDead || bIsDodging || bIsHitReacting || bDodgeOnCooldown || !DodgeAnimSequence) return;
 
 	StopSprinting();
 
@@ -508,7 +508,7 @@ void Ablackmyth_wukongCharacter::ResetDodgeCooldown()
 
 void Ablackmyth_wukongCharacter::PerformSpecialSkill(const FInputActionValue& Value)
 {
-	if (bIsDead || bIsSkillOnCooldown || bIsDodging)
+	if (bIsDead || bIsSkillOnCooldown || bIsDodging || bIsHitReacting)
 	{
 		return;
 	}
@@ -536,15 +536,17 @@ void Ablackmyth_wukongCharacter::PerformSpecialSkill(const FInputActionValue& Va
 		ResetCombo();
 		bIsAttacking = true;
 
-		// [核心新增] 技能攻击判定 (0.3秒)
 		FTimerHandle HitCheckTimer;
-		GetWorldTimerManager().SetTimer(HitCheckTimer, this, &Ablackmyth_wukongCharacter::CheckAttackHit, 0.3f, false);
+		GetWorldTimerManager().SetTimer(HitCheckTimer, [this]()
+			{
+				CheckAttackHit(SkillAttackRange);
+			}, 0.3f, false);
 
 		float AnimLength = SpecialSkillAnimSequence->GetPlayLength();
 		FTimerHandle SkillAnimTimer;
 		GetWorldTimerManager().SetTimer(SkillAnimTimer, [this]()
 			{
-				if (!bIsDead && !bIsDodging)
+				if (!bIsDead && !bIsDodging && !bIsHitReacting)
 				{
 					bIsAttacking = false;
 					CurrentSkillMontage = nullptr;
@@ -594,8 +596,46 @@ float Ablackmyth_wukongCharacter::TakeDamage(float DamageAmount, struct FDamageE
 	{
 		Die();
 	}
+	else if (HitReactAnimSequence)
+	{
+		// [核心新增] 如果没死，且有受击动画，则播放受击动画 (Hit Stun)
+
+		// 1. 打断当前所有动作 (奔跑、攻击、技能)
+		StopSprinting();
+		GetCharacterMovement()->StopMovementImmediately();
+		ResetCombo();
+
+		// 2. 播放受击动画 (作为 Dynamic Montage)
+		UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+		if (AnimInstance)
+		{
+			// 0.1s 快速混合，打断当前动作
+			AnimInstance->StopAllMontages(0.1f);
+			AnimInstance->PlaySlotAnimationAsDynamicMontage(
+				HitReactAnimSequence,
+				FName("DefaultSlot"),
+				0.1f, 0.1f, 1.0f, 1
+			);
+		}
+
+		// 3. 设置受击状态 (锁定输入)
+		bIsHitReacting = true;
+
+		// 4. 设置计时器恢复状态
+		float AnimLength = HitReactAnimSequence->GetPlayLength();
+
+		// 清除之前的恢复计时器 (防止连续受击逻辑错乱)
+		GetWorldTimerManager().ClearTimer(HitReactResetTimer);
+		GetWorldTimerManager().SetTimer(HitReactResetTimer, this, &Ablackmyth_wukongCharacter::ResetHitReactState, AnimLength, false);
+	}
 
 	return ActualDamage;
+}
+
+void Ablackmyth_wukongCharacter::ResetHitReactState()
+{
+	// 恢复行动能力
+	bIsHitReacting = false;
 }
 
 void Ablackmyth_wukongCharacter::Die()
@@ -621,6 +661,7 @@ void Ablackmyth_wukongCharacter::Die()
 	GetWorldTimerManager().ClearTimer(DodgeCooldownTimer);
 	GetWorldTimerManager().ClearTimer(ComboResetTimer);
 	GetWorldTimerManager().ClearTimer(SkillCooldownTimer);
+	GetWorldTimerManager().ClearTimer(HitReactResetTimer); // [新增] 清理受击计时
 
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
