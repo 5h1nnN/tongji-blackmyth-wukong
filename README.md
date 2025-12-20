@@ -24,3 +24,25 @@
 
 2. [开始编写游戏](https://dev.epicgames.com/documentation/zh-cn/unreal-engine/code-a-firstperson-adventure-game-in-unreal-engine)
 
+## 4	分工
+
+吴语真：
+
+- **变身系统**：可控制角色
+- **UI系统**：菜单、HUD等
+
+童文景：
+
+- **角色系统**：行走、奔跑、连招等
+- **技能**：定身术、分身术等
+- **升级系统**：经验等
+
+魏世杰：
+
+- **场景系统**：关卡切换、场景传送等
+- **道具系统**：药水、血瓶等
+
+闫容浩：
+
+- **普通敌人**：被定身等
+- **Boss**：怒气/二阶段等
