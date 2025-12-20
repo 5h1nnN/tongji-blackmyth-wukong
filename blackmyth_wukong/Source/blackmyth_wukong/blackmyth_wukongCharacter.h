@@ -7,7 +7,7 @@
 #include "Logging/LogMacros.h"
 #include "blackmyth_wukongCharacter.generated.h"
 
-// Ç°ÏòÉùÃ÷
+// å‰å‘å£°æ˜
 class USpringArmComponent;
 class UCameraComponent;
 class UInputMappingContext;
@@ -48,7 +48,11 @@ class Ablackmyth_wukongCharacter : public ACharacter
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* LookAction;
 
-	// --- Õ½¶·ÊäÈë¶¯×÷ ---
+	// --- [æ–°å¢] å¥”è·‘è¾“å…¥ ---
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	UInputAction* SprintAction;
+
+	// --- æˆ˜æ–—è¾“å…¥åŠ¨ä½œ ---
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* LightAttackAction;
@@ -59,76 +63,148 @@ class Ablackmyth_wukongCharacter : public ACharacter
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* DodgeAction;
 
-	// --- ¶¯»­×ÊÔ´ ---
+	// --- åŠ¨ç”»èµ„æº ---
 
-	/** Çá¹¥»÷Á¬ÕĞÃÉÌ«ÆæÊı×é */
+	/** è½»æ”»å‡»è¿æ‹›è’™å¤ªå¥‡æ•°ç»„ */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Animation, meta = (AllowPrivateAccess = "true"))
 	TArray<UAnimMontage*> LightAttackMontages;
 
-	/** ÖØ¹¥»÷ÃÉÌ«Ææ */
+	/** é‡æ”»å‡»è’™å¤ªå¥‡ */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Animation, meta = (AllowPrivateAccess = "true"))
 	UAnimMontage* HeavyAttackMontage;
 
-	/** ÉÁ±Ü¶¯»­ĞòÁĞ */
+	/** é—ªé¿åŠ¨ç”»åºåˆ— */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Animation, meta = (AllowPrivateAccess = "true"))
 	UAnimSequence* DodgeAnimSequence;
 
-	/** ËÀÍö¶¯»­ĞòÁĞ */
+	/** æ­»äº¡åŠ¨ç”»åºåˆ— */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Animation, meta = (AllowPrivateAccess = "true"))
 	UAnimSequence* DeathAnimSequence;
 
 public:
 	Ablackmyth_wukongCharacter();
 
-	// --- Õ½¶·²ÎÊıÅäÖÃ ---
+	// å¿…é¡»é‡å†™ Tick æ¥å¤„ç† Idle é€»è¾‘
+	virtual void Tick(float DeltaTime) override;
 
-	/** ×î´óÑªÁ¿ */
+	// --- æˆ˜æ–—å‚æ•°é…ç½® ---
+
+	/** æœ€å¤§è¡€é‡ (å‡çº§ä¼šè‡ªåŠ¨å¢åŠ ) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
 	float MaxHealth;
 
-	/** µ±Ç°ÑªÁ¿ */
+	/** å½“å‰è¡€é‡ */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Health")
 	float CurrentHealth;
 
-	/** ÉÁ±ÜÀäÈ´Ê±¼ä (Ãë) */
+	/** é—ªé¿å†·å´æ—¶é—´ (ç§’) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
 	float DodgeCooldownTime;
 
-	/** ÉÁ±Ü²¥·ÅËÙÂÊ */
+	/** é—ªé¿æ’­æ”¾é€Ÿç‡ */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
 	float DodgePlayRate;
 
-	/** ÉÁ±Ü³å´ÌÁ¦¶È */
+	/** é—ªé¿å†²åˆºåŠ›åº¦ */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
 	float DodgeStrength;
 
-	/** ËÀÍöÊ±ÏÔÊ¾µÄ UI Àà */
+	/** æ­»äº¡æ—¶æ˜¾ç¤ºçš„ UI ç±» */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
 	TSubclassOf<class UUserWidget> GameOverWidgetClass;
+
+	// --- [æ–°å¢] ç§»åŠ¨å‚æ•° ---
+
+	/** æ­£å¸¸è¡Œèµ°é€Ÿåº¦ */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	float WalkSpeed;
+
+	/** å¥”è·‘é€Ÿåº¦ */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	float SprintSpeed;
+
+	// =================================================================
+	// [RPG å‡çº§ç³»ç»Ÿ å˜é‡]
+	// =================================================================
+
+	/** å½“å‰ç­‰çº§ */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "RPG System")
+	int32 CharacterLevel;
+
+	/** å½“å‰ç»éªŒå€¼ */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "RPG System")
+	float CurrentXP;
+
+	/** å‡çº§æ‰€éœ€ç»éªŒå€¼ (è‡ªåŠ¨è®¡ç®—) */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "RPG System")
+	float MaxXP;
+
+	/** åŸºç¡€æ”»å‡»åŠ› (å‡çº§ä¼šè‡ªåŠ¨å¢åŠ ) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
+	float BaseAttackPower;
+
+	// =================================================================
+	// [RPG å‡çº§ç³»ç»Ÿ å‡½æ•°]
+	// =================================================================
+
+	/** è·å–ç»éªŒå€¼ */
+	UFUNCTION(BlueprintCallable, Category = "RPG System")
+	void GainExperience(float Amount);
+
+	/** è·å–å½“å‰æœ€ç»ˆæ”»å‡»åŠ› (å¯ç”¨äº ApplyDamage) */
+	UFUNCTION(BlueprintPure, Category = "Combat")
+	float GetTotalAttackPower() const;
 
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
 	virtual void Die();
 
 protected:
+	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+	virtual void BeginPlay();
+
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
 
-	// --- Õ½¶·´¦Àí ---
+	// --- [æ–°å¢] å¥”è·‘å¤„ç† ---
+	void Sprint();
+	void StopSprinting();
+
+	// --- æˆ˜æ–—å¤„ç† ---
 	void PerformLightAttack(const FInputActionValue& Value);
 	void PerformHeavyAttack(const FInputActionValue& Value);
 	void PerformDodge(const FInputActionValue& Value);
 
 	void ResetCombo();
 
-	/** ÖØÖÃÉÁ±ÜµÄ"¶¯×÷"×´Ì¬ (»Ö¸´ÒÆ¶¯/¹¥»÷/Ä¦²ÁÁ¦) */
+	/** é‡ç½®é—ªé¿çš„"åŠ¨ä½œ"çŠ¶æ€ (æ¢å¤ç§»åŠ¨/æ”»å‡»/æ‘©æ“¦åŠ›) */
 	void ResetDodgeState();
 
-	/** ÖØÖÃÉÁ±ÜµÄ"ÀäÈ´"×´Ì¬ (»Ö¸´ÔÙ´ÎÉÁ±ÜµÄÄÜÁ¦) */
+	/** é‡ç½®é—ªé¿çš„"å†·å´"çŠ¶æ€ (æ¢å¤å†æ¬¡é—ªé¿çš„èƒ½åŠ›) */
 	void ResetDodgeCooldown();
 
-protected:
-	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
-	virtual void BeginPlay();
+	// --- [RPG ä¿æŠ¤å‡½æ•°] ---
+
+	/** æ£€æŸ¥æ˜¯å¦å¯ä»¥å‡çº§ (è‡ªåŠ¨å¢åŠ å±æ€§) */
+	void CheckLevelUp();
+
+	/** å‡çº§äº‹ä»¶ (è“å›¾å¯å®ç°ï¼Œç”¨äºæ’­æ”¾ç‰¹æ•ˆ/å£°éŸ³) */
+	UFUNCTION(BlueprintImplementableEvent, Category = "RPG System")
+	void OnLevelUp();
+
+	// =================================================================
+	// [Idle é—²ç½®ç³»ç»Ÿ]
+	// =================================================================
+
+	/** å¤šå°‘ç§’ä¸æ“ä½œåæ’­æ”¾é—²ç½®åŠ¨ç”» */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation|Idle")
+	float IdleWaitTime;
+
+	/** é—²ç½®æ—¶æ’­æ”¾çš„åŠ¨ç”»åºåˆ— (Anim Sequence) - [ä¿®æ”¹ç‚¹] */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Animation|Idle")
+	UAnimSequence* IdleAnimSequence;
+
+	/** æ›´æ–°è¾“å…¥æ—¶é—´ (å¦‚æœæœ‰ä»»ä½•æ“ä½œï¼Œè°ƒç”¨æ­¤å‡½æ•°) */
+	void ResetIdleTimer();
 
 public:
 	FORCEINLINE class USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
@@ -139,13 +215,22 @@ private:
 	bool bIsAttacking;
 	FTimerHandle ComboResetTimer;
 
-	// --- ÉÁ±Ü×´Ì¬¹ÜÀí ---
+	// --- é—ªé¿çŠ¶æ€ç®¡ç† ---
 	bool bIsDodging;
 	bool bDodgeOnCooldown;
 	FTimerHandle DodgeResetTimer;
 	FTimerHandle DodgeCooldownTimer;
 
-	// --- ËÀÍö×´Ì¬¹ÜÀí ---
-	/** [ºËĞÄ] ·ÀÖ¹Á¬Ğøµ÷ÓÃ Die() µ¼ÖÂ¶¯»­¹íĞó */
+	// --- æ­»äº¡çŠ¶æ€ç®¡ç† ---
 	bool bIsDead;
+
+	// --- å¥”è·‘çŠ¶æ€ ---
+	bool bIsSprinting;
+
+	// --- Idle çŠ¶æ€ç®¡ç† ---
+	double LastInputTime;
+
+	/** [æ–°å¢] è¿è¡Œæ—¶ç”Ÿæˆçš„ä¸´æ—¶è’™å¤ªå¥‡å¼•ç”¨ï¼Œç”¨äºåœæ­¢åŠ¨ç”» */
+	UPROPERTY()
+	UAnimMontage* CurrentIdleMontage;
 };
