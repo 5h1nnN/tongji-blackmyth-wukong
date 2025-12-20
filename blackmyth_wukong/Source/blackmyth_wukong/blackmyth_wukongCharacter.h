@@ -84,6 +84,9 @@ class Ablackmyth_wukongCharacter : public ACharacter
 public:
 	Ablackmyth_wukongCharacter();
 
+	// 必须重写 Tick 来处理 Idle 逻辑
+	virtual void Tick(float DeltaTime) override;
+
 	// --- 战斗参数配置 ---
 
 	/** 最大血量 (升级会自动增加) */
@@ -188,6 +191,21 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "RPG System")
 	void OnLevelUp();
 
+	// =================================================================
+	// [Idle 闲置系统]
+	// =================================================================
+
+	/** 多少秒不操作后播放闲置动画 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation|Idle")
+	float IdleWaitTime;
+
+	/** 闲置时播放的动画序列 (Anim Sequence) - [修改点] */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Animation|Idle")
+	UAnimSequence* IdleAnimSequence;
+
+	/** 更新输入时间 (如果有任何操作，调用此函数) */
+	void ResetIdleTimer();
+
 public:
 	FORCEINLINE class USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
 	FORCEINLINE class UCameraComponent* GetFollowCamera() const { return FollowCamera; }
@@ -208,4 +226,11 @@ private:
 
 	// --- 奔跑状态 ---
 	bool bIsSprinting;
+
+	// --- Idle 状态管理 ---
+	double LastInputTime;
+
+	/** [新增] 运行时生成的临时蒙太奇引用，用于停止动画 */
+	UPROPERTY()
+	UAnimMontage* CurrentIdleMontage;
 };
