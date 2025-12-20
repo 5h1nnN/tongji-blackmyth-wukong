@@ -10,9 +10,15 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
-// [ÐÂÔö] ÒýÈë¶¯»­Ïà¹ØÍ·ÎÄ¼þ
+
+// å¿…é¡»å¼•ç”¨çš„å¤´æ–‡ä»¶
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimInstance.h"
+#include "Animation/AnimSequence.h" 
+#include "Blueprint/UserWidget.h" 
+#include "TimerManager.h"
+#include "Kismet/KismetSystemLibrary.h"
+#include "Kismet/GameplayStatics.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
@@ -21,46 +27,146 @@ DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
 Ablackmyth_wukongCharacter::Ablackmyth_wukongCharacter()
 {
-	// Set size for collision capsule
+	// ï¿½ï¿½ï¿½ï¿½Ã¿Ö¡ Tick
+	PrimaryActorTick.bCanEverTick = true;
+
 	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
 
-	// Don't rotate when the controller rotates. Let that just affect the camera.
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
 	bUseControllerRotationRoll = false;
 
-	// Configure character movement
-	GetCharacterMovement()->bOrientRotationToMovement = true; // Character moves in the direction of input...	
-	GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f); // ...at this rotation rate
-
-	// Note: For faster iteration times these variables, and many more, can be tweaked in the Character Blueprint
-	// instead of recompiling to adjust them
+	GetCharacterMovement()->bOrientRotationToMovement = true;
+	GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
 	GetCharacterMovement()->JumpZVelocity = 700.f;
 	GetCharacterMovement()->AirControl = 0.35f;
-	GetCharacterMovement()->MaxWalkSpeed = 500.f;
 	GetCharacterMovement()->MinAnalogWalkSpeed = 20.f;
 	GetCharacterMovement()->BrakingDecelerationWalking = 2000.f;
 	GetCharacterMovement()->BrakingDecelerationFalling = 1500.0f;
 
-	// Create a camera boom (pulls in towards the player if there is a collision)
+	WalkSpeed = 500.0f;
+	SprintSpeed = 900.0f;
+	bIsSprinting = false;
+
+	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	CameraBoom->SetupAttachment(RootComponent);
-	CameraBoom->TargetArmLength = 400.0f; // The camera follows at this distance behind the character	
-	CameraBoom->bUsePawnControlRotation = true; // Rotate the arm based on the controller
+	CameraBoom->TargetArmLength = 400.0f;
+	CameraBoom->bUsePawnControlRotation = true;
 
-	// Create a follow camera
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
-	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName); // Attach the camera to the end of the boom and let the boom adjust to match the controller orientation
-	FollowCamera->bUsePawnControlRotation = false; // Camera does not rotate relative to arm
+	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
+	FollowCamera->bUsePawnControlRotation = false;
 
-	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character) 
-	// are set in the derived blueprint asset named ThirdPersonCharacter (to avoid direct content references in C++)
+	MaxHealth = 100.0f;
+	CurrentHealth = MaxHealth;
+
+	ComboIndex = 0;
+	bIsAttacking = false;
+	bIsDodging = false;
+	bIsDead = false;
+
+	// [ï¿½ï¿½ï¿½ï¿½] ï¿½Ü»ï¿½×´Ì¬ï¿½ï¿½Ê¼ï¿½ï¿½
+	bIsHitReacting = false;
+
+	bDodgeOnCooldown = false;
+	DodgeCooldownTime = 0.5f;
+	DodgePlayRate = 1.3f;
+	DodgeStrength = 770.0f;
+
+	AttackRange = 150.0f;
+	SkillAttackRange = 400.0f;
+	AttackRadius = 80.0f;
+	bShowHitDebug = true;
+
+	SkillCooldownTime = 5.0f;
+	bIsSkillOnCooldown = false;
+	CurrentSkillMontage = nullptr;
+
+	CharacterLevel = 1;
+	CurrentXP = 0.0f;
+	MaxXP = 100.0f;
+	BaseAttackPower = 10.0f;
+
+	IdleWaitTime = 10.0f;
+	LastInputTime = 0.0;
+	CurrentIdleMontage = nullptr;
 }
 
 void Ablackmyth_wukongCharacter::BeginPlay()
 {
-	// Call the base class  
 	Super::BeginPlay();
+
+	CurrentHealth = MaxHealth;
+	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+
+	if (GetMesh())
+	{
+		GetMesh()->GlobalAnimRateScale = 1.0f;
+	}
+
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		PC->bShowMouseCursor = false;
+		FInputModeGameOnly InputMode;
+		PC->SetInputMode(InputMode);
+	}
+
+	ResetIdleTimer();
+}
+
+void Ablackmyth_wukongCharacter::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	// ï¿½Ü»ï¿½Ê±Ò²ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Idle
+	if (bIsDead || bIsHitReacting || !IdleAnimSequence) return;
+
+	double CurrentTime = GetWorld()->GetTimeSeconds();
+	bool bIsMoving = GetVelocity().SizeSquared() > 10.0f;
+	bool bIsFalling = GetCharacterMovement()->IsFalling();
+
+	if (bIsMoving || bIsFalling)
+	{
+		LastInputTime = CurrentTime;
+		return;
+	}
+
+	if ((CurrentTime - LastInputTime) > IdleWaitTime)
+	{
+		UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+		if (AnimInstance)
+		{
+			if (!AnimInstance->IsAnyMontagePlaying())
+			{
+				CurrentIdleMontage = AnimInstance->PlaySlotAnimationAsDynamicMontage(
+					IdleAnimSequence,
+					FName("DefaultSlot"),
+					0.25f, 0.25f, 1.0f, 1
+				);
+				UE_LOG(LogTemplateCharacter, Log, TEXT("Player AFK detected. Playing Idle Animation Sequence."));
+			}
+		}
+	}
+}
+
+void Ablackmyth_wukongCharacter::ResetIdleTimer()
+{
+	if (GetWorld())
+	{
+		LastInputTime = GetWorld()->GetTimeSeconds();
+	}
+
+	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+	if (AnimInstance && CurrentIdleMontage)
+	{
+		if (AnimInstance->Montage_IsPlaying(CurrentIdleMontage))
+		{
+			AnimInstance->Montage_Stop(0.25f, CurrentIdleMontage);
+		}
+		CurrentIdleMontage = nullptr;
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -68,7 +174,6 @@ void Ablackmyth_wukongCharacter::BeginPlay()
 
 void Ablackmyth_wukongCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
-	// Add Input Mapping Context
 	if (APlayerController* PlayerController = Cast<APlayerController>(GetController()))
 	{
 		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
@@ -77,50 +182,63 @@ void Ablackmyth_wukongCharacter::SetupPlayerInputComponent(UInputComponent* Play
 		}
 	}
 
-	// Set up action bindings
 	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent)) {
 
-		// Jumping
 		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Started, this, &ACharacter::Jump);
 		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
 
-		// Moving
 		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &Ablackmyth_wukongCharacter::Move);
-
-		// Looking
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &Ablackmyth_wukongCharacter::Look);
 
-		// [ÐÂÔö] Attacking - °ó¶¨¹¥»÷ÊÂ¼þ
-		// ×¢Òâ£ºÕâÀï¼ÓÁËÒ»¸öÅÐ¶Ï£¬È·±£ÄãÔÚÀ¶Í¼ÀïÉèÖÃÁË AttackAction£¬·ñÔò²»»á°ó¶¨
-		if (AttackAction)
+		if (SprintAction)
 		{
-			EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Started, this, &Ablackmyth_wukongCharacter::Attack);
+			EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Started, this, &Ablackmyth_wukongCharacter::Sprint);
+			EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Completed, this, &Ablackmyth_wukongCharacter::StopSprinting);
+			EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Canceled, this, &Ablackmyth_wukongCharacter::StopSprinting);
+		}
+
+		if (LightAttackAction)
+		{
+			EnhancedInputComponent->BindAction(LightAttackAction, ETriggerEvent::Started, this, &Ablackmyth_wukongCharacter::PerformLightAttack);
+		}
+		if (HeavyAttackAction)
+		{
+			EnhancedInputComponent->BindAction(HeavyAttackAction, ETriggerEvent::Started, this, &Ablackmyth_wukongCharacter::PerformHeavyAttack);
+		}
+
+		if (DodgeAction)
+		{
+			EnhancedInputComponent->BindAction(DodgeAction, ETriggerEvent::Started, this, &Ablackmyth_wukongCharacter::PerformDodge);
+		}
+
+		if (SpecialSkillAction)
+		{
+			EnhancedInputComponent->BindAction(SpecialSkillAction, ETriggerEvent::Started, this, &Ablackmyth_wukongCharacter::PerformSpecialSkill);
 		}
 	}
 	else
 	{
-		UE_LOG(LogTemplateCharacter, Error, TEXT("'%s' Failed to find an Enhanced Input component! This template is built to use the Enhanced Input system. If you intend to use the legacy system, then you will need to update this C++ file."), *GetNameSafe(this));
+		UE_LOG(LogTemplateCharacter, Error, TEXT("'%s' Failed to find an Enhanced Input component!"), *GetNameSafe(this));
 	}
 }
 
 void Ablackmyth_wukongCharacter::Move(const FInputActionValue& Value)
 {
-	// input is a Vector2D
+	ResetIdleTimer();
+
+	// [ï¿½Þ¸ï¿½] ï¿½ï¿½ï¿½ï¿½ bIsHitReactingï¿½ï¿½ï¿½Ü»ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ï¿½Æ¶ï¿½ (Ó²Ö±)
+	if (bIsDead || bIsDodging || bIsAttacking || bIsHitReacting) return;
+
 	FVector2D MovementVector = Value.Get<FVector2D>();
 
 	if (Controller != nullptr)
 	{
-		// find out which way is forward
 		const FRotator Rotation = Controller->GetControlRotation();
 		const FRotator YawRotation(0, Rotation.Yaw, 0);
 
-		// get forward vector
 		const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
-
-		// get right vector 
 		const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
 
-		// add movement 
 		AddMovementInput(ForwardDirection, MovementVector.Y);
 		AddMovementInput(RightDirection, MovementVector.X);
 	}
@@ -128,38 +246,500 @@ void Ablackmyth_wukongCharacter::Move(const FInputActionValue& Value)
 
 void Ablackmyth_wukongCharacter::Look(const FInputActionValue& Value)
 {
-	// input is a Vector2D
+	ResetIdleTimer();
+
+	if (bIsDead) return;
+
 	FVector2D LookAxisVector = Value.Get<FVector2D>();
 
 	if (Controller != nullptr)
 	{
-		// add yaw and pitch input to controller
 		AddControllerYawInput(LookAxisVector.X);
 		AddControllerPitchInput(LookAxisVector.Y);
 	}
 }
 
-// [ÐÂÔö] ¹¥»÷º¯ÊýÊµÏÖ
-void Ablackmyth_wukongCharacter::Attack(const FInputActionValue& Value)
+// -------------------------------------------------------------------------
+// [ï¿½ï¿½ï¿½ï¿½ÏµÍ³]
+// -------------------------------------------------------------------------
+
+void Ablackmyth_wukongCharacter::Sprint()
 {
-	// 1. È·±£ÔÚÀ¶Í¼ÖÐ·ÖÅäÁË AttackMontage
-	if (AttackMontage)
+	ResetIdleTimer();
+
+	// [ï¿½Þ¸ï¿½] ï¿½Ü»ï¿½Ê±ï¿½ï¿½ï¿½É±ï¿½ï¿½ï¿½
+	if (bIsDead || bIsDodging || bIsAttacking || bIsHitReacting) return;
+
+	bIsSprinting = true;
+	GetCharacterMovement()->MaxWalkSpeed = SprintSpeed;
+
+	float SpeedRatio = SprintSpeed / (WalkSpeed > KINDA_SMALL_NUMBER ? WalkSpeed : 500.0f);
+	if (GetMesh())
 	{
-		// 2. »ñÈ¡½ÇÉ«µÄ¶¯»­ÊµÀý (Anim Instance)
-		UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
-		if (AnimInstance)
+		GetMesh()->GlobalAnimRateScale = SpeedRatio;
+	}
+}
+
+void Ablackmyth_wukongCharacter::StopSprinting()
+{
+	bIsSprinting = false;
+	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+
+	if (GetMesh())
+	{
+		GetMesh()->GlobalAnimRateScale = 1.0f;
+	}
+}
+
+// -------------------------------------------------------------------------
+// [ï¿½ï¿½ï¿½ï¿½ï¿½Ð¶ï¿½]
+// -------------------------------------------------------------------------
+
+void Ablackmyth_wukongCharacter::CheckAttackHit(float CurrentRange)
+{
+	if (bIsDead) return;
+
+	FVector Start = GetActorLocation();
+	FVector End = Start + (GetActorForwardVector() * CurrentRange);
+
+	TArray<TEnumAsByte<EObjectTypeQuery>> ObjectTypes;
+	ObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECC_Pawn));
+	ObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECC_PhysicsBody));
+	ObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECC_WorldDynamic));
+
+	TArray<AActor*> ActorsToIgnore;
+	ActorsToIgnore.Add(this);
+
+	TArray<FHitResult> OutHits;
+
+	bool bHit = UKismetSystemLibrary::SphereTraceMultiForObjects(
+		GetWorld(),
+		Start,
+		End,
+		AttackRadius,
+		ObjectTypes,
+		false,
+		ActorsToIgnore,
+		bShowHitDebug ? EDrawDebugTrace::ForDuration : EDrawDebugTrace::None,
+		OutHits,
+		true
+	);
+
+	if (bHit)
+	{
+		TSet<AActor*> HitActors;
+
+		for (const FHitResult& Hit : OutHits)
 		{
-			// 3. ²¥·ÅÃÉÌ«Ææ
-			// Ö»ÓÐµ±¸ÃÃÉÌ«Ææµ±Ç°Ã»ÓÐ²¥·ÅÊ±²Å²¥·Å£¨·ÀÖ¹Á¬µãÊ±¹íÐó£¬Èç¹ûÄãÒª×öÁ¬ÕÐÏµÍ³£¬ÕâÀïÂß¼­»á¸ü¸´ÔÓ£©
-			if (!AnimInstance->Montage_IsPlaying(AttackMontage))
+			AActor* HitActor = Hit.GetActor();
+			if (HitActor && !HitActors.Contains(HitActor))
 			{
-				AnimInstance->Montage_Play(AttackMontage, 1.0f);
+				HitActors.Add(HitActor);
+
+				float Damage = GetTotalAttackPower();
+
+				UGameplayStatics::ApplyDamage(
+					HitActor,
+					Damage,
+					GetController(),
+					this,
+					UDamageType::StaticClass()
+				);
+
+				UE_LOG(LogTemplateCharacter, Log, TEXT("Hit Enemy: %s, Damage: %f"), *HitActor->GetName(), Damage);
 			}
 		}
 	}
+}
+
+// -------------------------------------------------------------------------
+// [Õ½ï¿½ï¿½ÏµÍ³]
+// -------------------------------------------------------------------------
+
+void Ablackmyth_wukongCharacter::PerformLightAttack(const FInputActionValue& Value)
+{
+	ResetIdleTimer();
+
+	// [ï¿½Þ¸ï¿½] ï¿½Ü»ï¿½Ê±ï¿½ï¿½ï¿½É¹ï¿½ï¿½ï¿½
+	if (bIsDead || bIsDodging || bIsHitReacting) return;
+	if (LightAttackMontages.Num() == 0) return;
+
+	StopSprinting();
+
+	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+	if (!AnimInstance) return;
+
+	if (HeavyAttackMontage && AnimInstance->Montage_IsPlaying(HeavyAttackMontage)) return;
+	if (CurrentSkillMontage && AnimInstance->Montage_IsPlaying(CurrentSkillMontage)) return;
+
+	if (ComboIndex >= LightAttackMontages.Num()) ComboIndex = 0;
+
+	UAnimMontage* MontageToPlay = LightAttackMontages[ComboIndex];
+
+	if (MontageToPlay)
+	{
+		AnimInstance->Montage_Play(MontageToPlay);
+
+		bIsAttacking = true;
+		ComboIndex++;
+
+		// Ê¹ï¿½ï¿½ Lambda ï¿½ï¿½ï¿½ï¿½ AttackRange
+		FTimerHandle HitCheckTimer;
+		GetWorldTimerManager().SetTimer(HitCheckTimer, [this]()
+			{
+				CheckAttackHit(AttackRange);
+			}, 0.2f, false);
+
+		GetWorldTimerManager().ClearTimer(ComboResetTimer);
+		GetWorldTimerManager().SetTimer(ComboResetTimer, this, &Ablackmyth_wukongCharacter::ResetCombo, 1.2f, false);
+	}
+}
+
+void Ablackmyth_wukongCharacter::PerformHeavyAttack(const FInputActionValue& Value)
+{
+	ResetIdleTimer();
+
+	if (bIsDead || bIsDodging || bIsHitReacting || !HeavyAttackMontage) return;
+
+	StopSprinting();
+
+	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+	if (!AnimInstance) return;
+
+	if (CurrentSkillMontage && AnimInstance->Montage_IsPlaying(CurrentSkillMontage)) return;
+
+	if (!AnimInstance->Montage_IsPlaying(HeavyAttackMontage))
+	{
+		AnimInstance->StopAllMontages(0.2f);
+		AnimInstance->Montage_Play(HeavyAttackMontage);
+
+		FTimerHandle HitCheckTimer;
+		GetWorldTimerManager().SetTimer(HitCheckTimer, [this]()
+			{
+				CheckAttackHit(AttackRange);
+			}, 0.4f, false);
+
+		ResetCombo();
+	}
+}
+
+void Ablackmyth_wukongCharacter::ResetCombo()
+{
+	ComboIndex = 0;
+	bIsAttacking = false;
+}
+
+void Ablackmyth_wukongCharacter::PerformDodge(const FInputActionValue& Value)
+{
+	ResetIdleTimer();
+
+	// [ï¿½Þ¸ï¿½] ï¿½Ü»ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ü»ï¿½Ç¿ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¬ï¿½ï¿½ï¿½ï¿½Ó²Ö±×´Ì¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½)
+	if (bIsDead || bIsDodging || bIsHitReacting || bDodgeOnCooldown || !DodgeAnimSequence) return;
+
+	StopSprinting();
+
+	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+	if (!AnimInstance) return;
+
+	FVector InputDir = GetLastMovementInputVector();
+	FVector FinalDodgeDir;
+
+	if (InputDir.IsNearlyZero())
+	{
+		FinalDodgeDir = GetActorForwardVector();
+	}
 	else
 	{
-		// µ÷ÊÔÐÅÏ¢£ºÈç¹ûÄã°´ÁË¹¥»÷¼üµ«Ã»·´Ó¦£¬¿´¿´Êä³öÈÕÖ¾ÀïÓÐÃ»ÓÐÕâ¾ä»°
-		UE_LOG(LogTemplateCharacter, Warning, TEXT("Attack Montage not assigned in Character Blueprint!"));
+		FinalDodgeDir = InputDir.GetSafeNormal();
 	}
+
+	ResetCombo();
+	AnimInstance->StopAllMontages(0.1f);
+
+	AnimInstance->PlaySlotAnimationAsDynamicMontage(
+		DodgeAnimSequence,
+		FName("DefaultSlot"),
+		0.1f, 0.2f, DodgePlayRate, 1);
+
+	bIsDodging = true;
+	bDodgeOnCooldown = true;
+
+	float AnimDuration = DodgeAnimSequence->GetPlayLength() / DodgePlayRate;
+
+	GetWorldTimerManager().SetTimer(DodgeResetTimer, this, &Ablackmyth_wukongCharacter::ResetDodgeState, AnimDuration, false);
+	GetWorldTimerManager().SetTimer(DodgeCooldownTimer, this, &Ablackmyth_wukongCharacter::ResetDodgeCooldown, DodgeCooldownTime, false);
+
+	bool bIsFalling = GetCharacterMovement()->IsFalling();
+
+	if (bIsFalling)
+	{
+		GetCharacterMovement()->BrakingDecelerationFalling = 0.0f;
+		LaunchCharacter(FinalDodgeDir * DodgeStrength, true, false);
+	}
+	else
+	{
+		GetCharacterMovement()->Velocity = FVector::ZeroVector;
+		GetCharacterMovement()->StopMovementImmediately();
+		GetCharacterMovement()->GroundFriction = 0.0f;
+		GetCharacterMovement()->BrakingDecelerationWalking = 0.0f;
+		LaunchCharacter(FinalDodgeDir * DodgeStrength, true, true);
+	}
+}
+
+void Ablackmyth_wukongCharacter::ResetDodgeState()
+{
+	if (bIsDead) return;
+
+	bIsDodging = false;
+
+	GetCharacterMovement()->GroundFriction = 8.0f;
+	GetCharacterMovement()->BrakingDecelerationWalking = 2000.0f;
+	GetCharacterMovement()->BrakingDecelerationFalling = 1500.0f;
+}
+
+void Ablackmyth_wukongCharacter::ResetDodgeCooldown()
+{
+	bDodgeOnCooldown = false;
+}
+
+// -------------------------------------------------------------------------
+// [ï¿½ï¿½ï¿½â¼¼ï¿½ï¿½ÏµÍ³]
+// -------------------------------------------------------------------------
+
+void Ablackmyth_wukongCharacter::PerformSpecialSkill(const FInputActionValue& Value)
+{
+	if (bIsDead || bIsSkillOnCooldown || bIsDodging || bIsHitReacting)
+	{
+		return;
+	}
+
+	if (!SpecialSkillAnimSequence)
+	{
+		return;
+	}
+
+	ResetIdleTimer();
+	StopSprinting();
+	GetCharacterMovement()->StopMovementImmediately();
+
+	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+	if (AnimInstance)
+	{
+		AnimInstance->StopAllMontages(0.2f);
+
+		CurrentSkillMontage = AnimInstance->PlaySlotAnimationAsDynamicMontage(
+			SpecialSkillAnimSequence,
+			FName("DefaultSlot"),
+			0.2f, 0.2f, 1.0f, 1
+		);
+
+		ResetCombo();
+		bIsAttacking = true;
+
+		FTimerHandle HitCheckTimer;
+		GetWorldTimerManager().SetTimer(HitCheckTimer, [this]()
+			{
+				CheckAttackHit(SkillAttackRange);
+			}, 0.3f, false);
+
+		float AnimLength = SpecialSkillAnimSequence->GetPlayLength();
+		FTimerHandle SkillAnimTimer;
+		GetWorldTimerManager().SetTimer(SkillAnimTimer, [this]()
+			{
+				if (!bIsDead && !bIsDodging && !bIsHitReacting)
+				{
+					bIsAttacking = false;
+					CurrentSkillMontage = nullptr;
+				}
+			}, AnimLength, false);
+	}
+
+	bIsSkillOnCooldown = true;
+	GetWorldTimerManager().SetTimer(SkillCooldownTimer, this, &Ablackmyth_wukongCharacter::ResetSkillCooldown, SkillCooldownTime, false);
+
+	UE_LOG(LogTemplateCharacter, Log, TEXT("Special Skill Used! Cooldown: %f"), SkillCooldownTime);
+}
+
+void Ablackmyth_wukongCharacter::ResetSkillCooldown()
+{
+	bIsSkillOnCooldown = false;
+	UE_LOG(LogTemplateCharacter, Log, TEXT("Special Skill Ready!"));
+}
+
+float Ablackmyth_wukongCharacter::GetSkillCooldownFraction() const
+{
+	if (GetWorldTimerManager().IsTimerActive(SkillCooldownTimer))
+	{
+		float Remaining = GetWorldTimerManager().GetTimerRemaining(SkillCooldownTimer);
+		float Total = SkillCooldownTime > 0.f ? SkillCooldownTime : 1.f;
+		return FMath::Clamp(Remaining / Total, 0.0f, 1.0f);
+	}
+	return 0.0f;
+}
+
+// -------------------------------------------------------------------------
+// [RPG/Damage ÏµÍ³]
+// -------------------------------------------------------------------------
+
+float Ablackmyth_wukongCharacter::TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser)
+{
+	if (bIsDead) return 0.0f;
+
+	ResetIdleTimer();
+
+	float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+
+	CurrentHealth = FMath::Clamp(CurrentHealth - ActualDamage, 0.0f, MaxHealth);
+	UE_LOG(LogTemplateCharacter, Warning, TEXT("Took Damage: %f, Health: %f"), ActualDamage, CurrentHealth);
+
+	if (CurrentHealth <= 0.0f)
+	{
+		Die();
+	}
+	else if (HitReactAnimSequence)
+	{
+		// [ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½] ï¿½ï¿½ï¿½Ã»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ü»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ò²¥·ï¿½ï¿½Ü»ï¿½ï¿½ï¿½ï¿½ï¿½ (Hit Stun)
+
+		// 1. ï¿½ï¿½Ïµï¿½Ç°ï¿½ï¿½ï¿½Ð¶ï¿½ï¿½ï¿½ (ï¿½ï¿½ï¿½Ü¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½)
+		StopSprinting();
+		GetCharacterMovement()->StopMovementImmediately();
+		ResetCombo();
+
+		// 2. ï¿½ï¿½ï¿½ï¿½ï¿½Ü»ï¿½ï¿½ï¿½ï¿½ï¿½ (ï¿½ï¿½Îª Dynamic Montage)
+		UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+		if (AnimInstance)
+		{
+			// 0.1s ï¿½ï¿½ï¿½Ù»ï¿½Ï£ï¿½ï¿½ï¿½Ïµï¿½Ç°ï¿½ï¿½ï¿½ï¿½
+			AnimInstance->StopAllMontages(0.1f);
+			AnimInstance->PlaySlotAnimationAsDynamicMontage(
+				HitReactAnimSequence,
+				FName("DefaultSlot"),
+				0.1f, 0.1f, 1.0f, 1
+			);
+		}
+
+		// 3. ï¿½ï¿½ï¿½ï¿½ï¿½Ü»ï¿½×´Ì¬ (ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½)
+		bIsHitReacting = true;
+
+		// 4. ï¿½ï¿½ï¿½Ã¼ï¿½Ê±ï¿½ï¿½ï¿½Ö¸ï¿½×´Ì¬
+		float AnimLength = HitReactAnimSequence->GetPlayLength();
+
+		// ï¿½ï¿½ï¿½Ö®Ç°ï¿½Ä»Ö¸ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ (ï¿½ï¿½Ö¹ï¿½ï¿½ï¿½ï¿½ï¿½Ü»ï¿½ï¿½ß¼ï¿½ï¿½ï¿½ï¿½ï¿½)
+		GetWorldTimerManager().ClearTimer(HitReactResetTimer);
+		GetWorldTimerManager().SetTimer(HitReactResetTimer, this, &Ablackmyth_wukongCharacter::ResetHitReactState, AnimLength, false);
+	}
+
+	return ActualDamage;
+}
+
+void Ablackmyth_wukongCharacter::ResetHitReactState()
+{
+	// ï¿½Ö¸ï¿½ï¿½Ð¶ï¿½ï¿½ï¿½ï¿½ï¿½
+	bIsHitReacting = false;
+}
+
+void Ablackmyth_wukongCharacter::Die()
+{
+	if (bIsDead) return;
+	bIsDead = true;
+
+	StopSprinting();
+
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		DisableInput(PC);
+	}
+
+	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+	if (AnimInstance)
+	{
+		AnimInstance->StopAllMontages(0.2f);
+	}
+	ResetCombo();
+
+	GetWorldTimerManager().ClearTimer(DodgeResetTimer);
+	GetWorldTimerManager().ClearTimer(DodgeCooldownTimer);
+	GetWorldTimerManager().ClearTimer(ComboResetTimer);
+	GetWorldTimerManager().ClearTimer(SkillCooldownTimer);
+	GetWorldTimerManager().ClearTimer(HitReactResetTimer); // [ï¿½ï¿½ï¿½ï¿½] ï¿½ï¿½ï¿½ï¿½ï¿½Ü»ï¿½ï¿½ï¿½Ê±
+
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+
+	if (DeathAnimSequence && AnimInstance)
+	{
+		float AnimLength = DeathAnimSequence->GetPlayLength();
+		float BlendOutTime = 0.25f;
+
+		AnimInstance->PlaySlotAnimationAsDynamicMontage(
+			DeathAnimSequence,
+			FName("DefaultSlot"),
+			0.25f, 0.25f, 1.0f, 1
+		);
+
+		float RagdollDelay = FMath::Max(0.0f, AnimLength - BlendOutTime);
+
+		FTimerHandle TimerHandle_Ragdoll;
+		GetWorldTimerManager().SetTimer(TimerHandle_Ragdoll, [this]()
+			{
+				GetMesh()->SetSimulatePhysics(true);
+				GetMesh()->SetCollisionProfileName(TEXT("Ragdoll"));
+				GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+				GetMesh()->bPauseAnims = true;
+			}, RagdollDelay, false);
+	}
+	else
+	{
+		GetMesh()->SetSimulatePhysics(true);
+		GetMesh()->SetCollisionProfileName(TEXT("Ragdoll"));
+		GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
+
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		FTimerHandle TimerHandle_ShowUI;
+		GetWorldTimerManager().SetTimer(TimerHandle_ShowUI, [this, PC]()
+			{
+				if (GameOverWidgetClass)
+				{
+					UUserWidget* Widget = CreateWidget<UUserWidget>(GetWorld(), GameOverWidgetClass);
+					if (Widget)
+					{
+						Widget->AddToViewport();
+						PC->bShowMouseCursor = true;
+						FInputModeUIOnly InputMode;
+						InputMode.SetWidgetToFocus(Widget->TakeWidget());
+						PC->SetInputMode(InputMode);
+					}
+				}
+			}, 2.0f, false);
+	}
+}
+
+void Ablackmyth_wukongCharacter::GainExperience(float Amount)
+{
+	if (bIsDead) return;
+	CurrentXP += Amount;
+	UE_LOG(LogTemplateCharacter, Log, TEXT("Gained XP: %f. Total: %f / %f"), Amount, CurrentXP, MaxXP);
+	CheckLevelUp();
+}
+
+void Ablackmyth_wukongCharacter::CheckLevelUp()
+{
+	while (CurrentXP >= MaxXP)
+	{
+		CurrentXP -= MaxXP;
+		CharacterLevel++;
+		MaxHealth += 20.0f;
+		BaseAttackPower += 5.0f;
+		MaxXP = MaxXP * 1.5f;
+		CurrentHealth = MaxHealth;
+		UE_LOG(LogTemplateCharacter, Log, TEXT("Level Up! New Level: %d. Stats Increased."), CharacterLevel);
+		OnLevelUp();
+	}
+}
+
+float Ablackmyth_wukongCharacter::GetTotalAttackPower() const
+{
+	return BaseAttackPower;
 }
