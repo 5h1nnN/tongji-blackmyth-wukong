@@ -81,6 +81,14 @@ Ablackmyth_wukongCharacter::Ablackmyth_wukongCharacter()
 
 	// [修改] 提高默认冲刺力度
 	DodgeStrength = 770.0f;
+
+	// =================================================================
+	// [初始化] RPG 系统参数
+	// =================================================================
+	CharacterLevel = 1;
+	CurrentXP = 0.0f;
+	MaxXP = 100.0f;      // 1级升2级需要100经验
+	BaseAttackPower = 10.0f; // 初始攻击力
 }
 
 void Ablackmyth_wukongCharacter::BeginPlay()
@@ -202,8 +210,6 @@ void Ablackmyth_wukongCharacter::Sprint()
 	GetCharacterMovement()->MaxWalkSpeed = SprintSpeed;
 
 	// --- [核心修改] 纯C++控制动画速率 ---
-	// 计算加速比率 (例如 800/500 = 1.6倍)
-	// 加上 KINDA_SMALL_NUMBER 防止除以0 (虽然构造函数里已经赋值了)
 	float SpeedRatio = SprintSpeed / (WalkSpeed > KINDA_SMALL_NUMBER ? WalkSpeed : 500.0f);
 
 	if (GetMesh())
@@ -233,7 +239,7 @@ void Ablackmyth_wukongCharacter::PerformLightAttack(const FInputActionValue& Val
 	if (bIsDead || bIsDodging) return;
 	if (LightAttackMontages.Num() == 0) return;
 
-	// 攻击时强制停止奔跑 (这会自动调用 StopSprinting 恢复动画速率为 1.0)
+	// 攻击时强制停止奔跑
 	StopSprinting();
 
 	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
@@ -303,7 +309,7 @@ void Ablackmyth_wukongCharacter::PerformDodge(const FInputActionValue& Value)
 		FinalDodgeDir = InputDir.GetSafeNormal();
 	}
 
-	// --- 2. 物理状态重置 (修复空中定身 BUG) ---
+	// --- 2. 物理状态重置 ---
 	bool bIsFalling = GetCharacterMovement()->IsFalling();
 
 	if (bIsFalling)
@@ -452,4 +458,51 @@ void Ablackmyth_wukongCharacter::Die()
 				}
 			}, 2.0f, false);
 	}
+}
+
+// -------------------------------------------------------------------------
+// [RPG 升级系统 实现]
+// -------------------------------------------------------------------------
+
+void Ablackmyth_wukongCharacter::GainExperience(float Amount)
+{
+	if (bIsDead) return;
+
+	CurrentXP += Amount;
+	UE_LOG(LogTemplateCharacter, Log, TEXT("Gained XP: %f. Total: %f / %f"), Amount, CurrentXP, MaxXP);
+
+	// 循环检查是否满足升级条件
+	CheckLevelUp();
+}
+
+void Ablackmyth_wukongCharacter::CheckLevelUp()
+{
+	// 使用 while 循环，防止经验值过多需要连升几级的情况
+	while (CurrentXP >= MaxXP)
+	{
+		CurrentXP -= MaxXP;
+		CharacterLevel++;
+
+		// --- [自动成长逻辑] ---
+		// 每次升级自动增加属性，不再需要手动分配点数
+		MaxHealth += 20.0f;       // 生命上限 +20
+		BaseAttackPower += 5.0f;  // 攻击力 +5
+
+		// 升级曲线：每级所需经验增加 50%
+		MaxXP = MaxXP * 1.5f;
+
+		// 升级时回满血 (恢复到新的 MaxHealth)
+		CurrentHealth = MaxHealth;
+
+		UE_LOG(LogTemplateCharacter, Log, TEXT("Level Up! New Level: %d. Stats Increased."), CharacterLevel);
+
+		// 调用蓝图事件 (播放特效/UI提示)
+		OnLevelUp();
+	}
+}
+
+float Ablackmyth_wukongCharacter::GetTotalAttackPower() const
+{
+	// 返回当前成长的攻击力
+	return BaseAttackPower;
 }

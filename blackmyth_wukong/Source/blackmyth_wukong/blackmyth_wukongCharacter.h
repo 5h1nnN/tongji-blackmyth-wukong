@@ -86,7 +86,7 @@ public:
 
 	// --- 战斗参数配置 ---
 
-	/** 最大血量 */
+	/** 最大血量 (升级会自动增加) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
 	float MaxHealth;
 
@@ -120,6 +120,38 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
 	float SprintSpeed;
 
+	// =================================================================
+	// [RPG 升级系统 变量]
+	// =================================================================
+
+	/** 当前等级 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "RPG System")
+	int32 CharacterLevel;
+
+	/** 当前经验值 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "RPG System")
+	float CurrentXP;
+
+	/** 升级所需经验值 (自动计算) */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "RPG System")
+	float MaxXP;
+
+	/** 基础攻击力 (升级会自动增加) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
+	float BaseAttackPower;
+
+	// =================================================================
+	// [RPG 升级系统 函数]
+	// =================================================================
+
+	/** 获取经验值 */
+	UFUNCTION(BlueprintCallable, Category = "RPG System")
+	void GainExperience(float Amount);
+
+	/** 获取当前最终攻击力 (可用于 ApplyDamage) */
+	UFUNCTION(BlueprintPure, Category = "Combat")
+	float GetTotalAttackPower() const;
+
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
 	virtual void Die();
 
@@ -146,6 +178,15 @@ protected:
 
 	/** 重置闪避的"冷却"状态 (恢复再次闪避的能力) */
 	void ResetDodgeCooldown();
+
+	// --- [RPG 保护函数] ---
+
+	/** 检查是否可以升级 (自动增加属性) */
+	void CheckLevelUp();
+
+	/** 升级事件 (蓝图可实现，用于播放特效/声音) */
+	UFUNCTION(BlueprintImplementableEvent, Category = "RPG System")
+	void OnLevelUp();
 
 public:
 	FORCEINLINE class USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
