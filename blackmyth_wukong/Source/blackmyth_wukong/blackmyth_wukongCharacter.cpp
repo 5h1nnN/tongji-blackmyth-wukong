@@ -11,7 +11,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 
-// ±ØÐëÒýÓÃµÄÍ·ÎÄ¼þ
+// å¿…é¡»å¼•ç”¨çš„å¤´æ–‡ä»¶
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimSequence.h" 
@@ -27,7 +27,7 @@ DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
 Ablackmyth_wukongCharacter::Ablackmyth_wukongCharacter()
 {
-	// ÔÊÐíÃ¿Ö¡ Tick
+	// ï¿½ï¿½ï¿½ï¿½Ã¿Ö¡ Tick
 	PrimaryActorTick.bCanEverTick = true;
 
 	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
@@ -67,7 +67,7 @@ Ablackmyth_wukongCharacter::Ablackmyth_wukongCharacter()
 	bIsDodging = false;
 	bIsDead = false;
 
-	// [ÐÂÔö] ÊÜ»÷×´Ì¬³õÊ¼»¯
+	// [ï¿½ï¿½ï¿½ï¿½] ï¿½Ü»ï¿½×´Ì¬ï¿½ï¿½Ê¼ï¿½ï¿½
 	bIsHitReacting = false;
 
 	bDodgeOnCooldown = false;
@@ -120,7 +120,7 @@ void Ablackmyth_wukongCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	// ÊÜ»÷Ê±Ò²²»²¥·Å Idle
+	// ï¿½Ü»ï¿½Ê±Ò²ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Idle
 	if (bIsDead || bIsHitReacting || !IdleAnimSequence) return;
 
 	double CurrentTime = GetWorld()->GetTimeSeconds();
@@ -226,7 +226,7 @@ void Ablackmyth_wukongCharacter::Move(const FInputActionValue& Value)
 {
 	ResetIdleTimer();
 
-	// [ÐÞ¸Ä] Ôö¼Ó bIsHitReacting£¬ÊÜ»÷Ê±²»¿ÉÒÆ¶¯ (Ó²Ö±)
+	// [ï¿½Þ¸ï¿½] ï¿½ï¿½ï¿½ï¿½ bIsHitReactingï¿½ï¿½ï¿½Ü»ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ï¿½Æ¶ï¿½ (Ó²Ö±)
 	if (bIsDead || bIsDodging || bIsAttacking || bIsHitReacting) return;
 
 	FVector2D MovementVector = Value.Get<FVector2D>();
@@ -260,14 +260,14 @@ void Ablackmyth_wukongCharacter::Look(const FInputActionValue& Value)
 }
 
 // -------------------------------------------------------------------------
-// [±¼ÅÜÏµÍ³]
+// [ï¿½ï¿½ï¿½ï¿½ÏµÍ³]
 // -------------------------------------------------------------------------
 
 void Ablackmyth_wukongCharacter::Sprint()
 {
 	ResetIdleTimer();
 
-	// [ÐÞ¸Ä] ÊÜ»÷Ê±²»¿É±¼ÅÜ
+	// [ï¿½Þ¸ï¿½] ï¿½Ü»ï¿½Ê±ï¿½ï¿½ï¿½É±ï¿½ï¿½ï¿½
 	if (bIsDead || bIsDodging || bIsAttacking || bIsHitReacting) return;
 
 	bIsSprinting = true;
@@ -292,7 +292,7 @@ void Ablackmyth_wukongCharacter::StopSprinting()
 }
 
 // -------------------------------------------------------------------------
-// [¹¥»÷ÅÐ¶¨]
+// [ï¿½ï¿½ï¿½ï¿½ï¿½Ð¶ï¿½]
 // -------------------------------------------------------------------------
 
 void Ablackmyth_wukongCharacter::CheckAttackHit(float CurrentRange)
@@ -353,14 +353,14 @@ void Ablackmyth_wukongCharacter::CheckAttackHit(float CurrentRange)
 }
 
 // -------------------------------------------------------------------------
-// [Õ½¶·ÏµÍ³]
+// [Õ½ï¿½ï¿½ÏµÍ³]
 // -------------------------------------------------------------------------
 
 void Ablackmyth_wukongCharacter::PerformLightAttack(const FInputActionValue& Value)
 {
 	ResetIdleTimer();
 
-	// [ÐÞ¸Ä] ÊÜ»÷Ê±²»¿É¹¥»÷
+	// [ï¿½Þ¸ï¿½] ï¿½Ü»ï¿½Ê±ï¿½ï¿½ï¿½É¹ï¿½ï¿½ï¿½
 	if (bIsDead || bIsDodging || bIsHitReacting) return;
 	if (LightAttackMontages.Num() == 0) return;
 
@@ -383,7 +383,7 @@ void Ablackmyth_wukongCharacter::PerformLightAttack(const FInputActionValue& Val
 		bIsAttacking = true;
 		ComboIndex++;
 
-		// Ê¹ÓÃ Lambda ´«µÝ AttackRange
+		// Ê¹ï¿½ï¿½ Lambda ï¿½ï¿½ï¿½ï¿½ AttackRange
 		FTimerHandle HitCheckTimer;
 		GetWorldTimerManager().SetTimer(HitCheckTimer, [this]()
 			{
@@ -433,7 +433,7 @@ void Ablackmyth_wukongCharacter::PerformDodge(const FInputActionValue& Value)
 {
 	ResetIdleTimer();
 
-	// [ÐÞ¸Ä] ÊÜ»÷Ê±²»¿ÉÉÁ±Ü (³ý·ÇÄãÏë×öÊÜ»÷Ç¿ÖÆÈ¡Ïû£¬ÕâÀïÄ¬ÈÏÊÇÓ²Ö±×´Ì¬²»¿ÉÉÁ±Ü)
+	// [ï¿½Þ¸ï¿½] ï¿½Ü»ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ü»ï¿½Ç¿ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¬ï¿½ï¿½ï¿½ï¿½Ó²Ö±×´Ì¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½)
 	if (bIsDead || bIsDodging || bIsHitReacting || bDodgeOnCooldown || !DodgeAnimSequence) return;
 
 	StopSprinting();
@@ -503,7 +503,7 @@ void Ablackmyth_wukongCharacter::ResetDodgeCooldown()
 }
 
 // -------------------------------------------------------------------------
-// [ÌØÊâ¼¼ÄÜÏµÍ³]
+// [ï¿½ï¿½ï¿½â¼¼ï¿½ï¿½ÏµÍ³]
 // -------------------------------------------------------------------------
 
 void Ablackmyth_wukongCharacter::PerformSpecialSkill(const FInputActionValue& Value)
@@ -598,18 +598,18 @@ float Ablackmyth_wukongCharacter::TakeDamage(float DamageAmount, struct FDamageE
 	}
 	else if (HitReactAnimSequence)
 	{
-		// [ºËÐÄÐÂÔö] Èç¹ûÃ»ËÀ£¬ÇÒÓÐÊÜ»÷¶¯»­£¬Ôò²¥·ÅÊÜ»÷¶¯»­ (Hit Stun)
+		// [ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½] ï¿½ï¿½ï¿½Ã»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ü»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ò²¥·ï¿½ï¿½Ü»ï¿½ï¿½ï¿½ï¿½ï¿½ (Hit Stun)
 
-		// 1. ´ò¶Ïµ±Ç°ËùÓÐ¶¯×÷ (±¼ÅÜ¡¢¹¥»÷¡¢¼¼ÄÜ)
+		// 1. ï¿½ï¿½Ïµï¿½Ç°ï¿½ï¿½ï¿½Ð¶ï¿½ï¿½ï¿½ (ï¿½ï¿½ï¿½Ü¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½)
 		StopSprinting();
 		GetCharacterMovement()->StopMovementImmediately();
 		ResetCombo();
 
-		// 2. ²¥·ÅÊÜ»÷¶¯»­ (×÷Îª Dynamic Montage)
+		// 2. ï¿½ï¿½ï¿½ï¿½ï¿½Ü»ï¿½ï¿½ï¿½ï¿½ï¿½ (ï¿½ï¿½Îª Dynamic Montage)
 		UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
 		if (AnimInstance)
 		{
-			// 0.1s ¿ìËÙ»ìºÏ£¬´ò¶Ïµ±Ç°¶¯×÷
+			// 0.1s ï¿½ï¿½ï¿½Ù»ï¿½Ï£ï¿½ï¿½ï¿½Ïµï¿½Ç°ï¿½ï¿½ï¿½ï¿½
 			AnimInstance->StopAllMontages(0.1f);
 			AnimInstance->PlaySlotAnimationAsDynamicMontage(
 				HitReactAnimSequence,
@@ -618,13 +618,13 @@ float Ablackmyth_wukongCharacter::TakeDamage(float DamageAmount, struct FDamageE
 			);
 		}
 
-		// 3. ÉèÖÃÊÜ»÷×´Ì¬ (Ëø¶¨ÊäÈë)
+		// 3. ï¿½ï¿½ï¿½ï¿½ï¿½Ü»ï¿½×´Ì¬ (ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½)
 		bIsHitReacting = true;
 
-		// 4. ÉèÖÃ¼ÆÊ±Æ÷»Ö¸´×´Ì¬
+		// 4. ï¿½ï¿½ï¿½Ã¼ï¿½Ê±ï¿½ï¿½ï¿½Ö¸ï¿½×´Ì¬
 		float AnimLength = HitReactAnimSequence->GetPlayLength();
 
-		// Çå³ýÖ®Ç°µÄ»Ö¸´¼ÆÊ±Æ÷ (·ÀÖ¹Á¬ÐøÊÜ»÷Âß¼­´íÂÒ)
+		// ï¿½ï¿½ï¿½Ö®Ç°ï¿½Ä»Ö¸ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ (ï¿½ï¿½Ö¹ï¿½ï¿½ï¿½ï¿½ï¿½Ü»ï¿½ï¿½ß¼ï¿½ï¿½ï¿½ï¿½ï¿½)
 		GetWorldTimerManager().ClearTimer(HitReactResetTimer);
 		GetWorldTimerManager().SetTimer(HitReactResetTimer, this, &Ablackmyth_wukongCharacter::ResetHitReactState, AnimLength, false);
 	}
@@ -634,7 +634,7 @@ float Ablackmyth_wukongCharacter::TakeDamage(float DamageAmount, struct FDamageE
 
 void Ablackmyth_wukongCharacter::ResetHitReactState()
 {
-	// »Ö¸´ÐÐ¶¯ÄÜÁ¦
+	// ï¿½Ö¸ï¿½ï¿½Ð¶ï¿½ï¿½ï¿½ï¿½ï¿½
 	bIsHitReacting = false;
 }
 
@@ -661,7 +661,7 @@ void Ablackmyth_wukongCharacter::Die()
 	GetWorldTimerManager().ClearTimer(DodgeCooldownTimer);
 	GetWorldTimerManager().ClearTimer(ComboResetTimer);
 	GetWorldTimerManager().ClearTimer(SkillCooldownTimer);
-	GetWorldTimerManager().ClearTimer(HitReactResetTimer); // [ÐÂÔö] ÇåÀíÊÜ»÷¼ÆÊ±
+	GetWorldTimerManager().ClearTimer(HitReactResetTimer); // [ï¿½ï¿½ï¿½ï¿½] ï¿½ï¿½ï¿½ï¿½ï¿½Ü»ï¿½ï¿½ï¿½Ê±
 
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
