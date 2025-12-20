@@ -52,6 +52,10 @@ class Ablackmyth_wukongCharacter : public ACharacter
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* SprintAction;
 
+	// --- [新增] 特殊技能输入 ---
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	UInputAction* SpecialSkillAction;
+
 	// --- 战斗输入动作 ---
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
@@ -73,6 +77,10 @@ class Ablackmyth_wukongCharacter : public ACharacter
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Animation, meta = (AllowPrivateAccess = "true"))
 	UAnimMontage* HeavyAttackMontage;
 
+	/** 特殊技能动画序列 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Animation, meta = (AllowPrivateAccess = "true"))
+	UAnimSequence* SpecialSkillAnimSequence;
+
 	/** 闪避动画序列 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Animation, meta = (AllowPrivateAccess = "true"))
 	UAnimSequence* DodgeAnimSequence;
@@ -84,12 +92,11 @@ class Ablackmyth_wukongCharacter : public ACharacter
 public:
 	Ablackmyth_wukongCharacter();
 
-	// 必须重写 Tick 来处理 Idle 逻辑
 	virtual void Tick(float DeltaTime) override;
 
 	// --- 战斗参数配置 ---
 
-	/** 最大血量 (升级会自动增加) */
+	/** 最大血量 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
 	float MaxHealth;
 
@@ -109,11 +116,35 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
 	float DodgeStrength;
 
+	// --- [新增] 攻击判定参数 ---
+
+	/** 攻击判定距离 (前方多少厘米) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|HitDetection")
+	float AttackRange;
+
+	/** 攻击判定球体半径 (判定宽度) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|HitDetection")
+	float AttackRadius;
+
+	/** 是否显示调试球 (Debug Sphere) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|HitDetection")
+	bool bShowHitDebug;
+
+	// --- 技能参数配置 ---
+
+	/** 技能冷却时间 (秒) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Skill")
+	float SkillCooldownTime;
+
+	/** 技能是否处于冷却中 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat|Skill")
+	bool bIsSkillOnCooldown;
+
 	/** 死亡时显示的 UI 类 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
 	TSubclassOf<class UUserWidget> GameOverWidgetClass;
 
-	// --- [新增] 移动参数 ---
+	// --- 移动参数 ---
 
 	/** 正常行走速度 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
@@ -127,19 +158,15 @@ public:
 	// [RPG 升级系统 变量]
 	// =================================================================
 
-	/** 当前等级 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "RPG System")
 	int32 CharacterLevel;
 
-	/** 当前经验值 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "RPG System")
 	float CurrentXP;
 
-	/** 升级所需经验值 (自动计算) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "RPG System")
 	float MaxXP;
 
-	/** 基础攻击力 (升级会自动增加) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
 	float BaseAttackPower;
 
@@ -147,13 +174,18 @@ public:
 	// [RPG 升级系统 函数]
 	// =================================================================
 
-	/** 获取经验值 */
 	UFUNCTION(BlueprintCallable, Category = "RPG System")
 	void GainExperience(float Amount);
 
-	/** 获取当前最终攻击力 (可用于 ApplyDamage) */
 	UFUNCTION(BlueprintPure, Category = "Combat")
 	float GetTotalAttackPower() const;
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Skill")
+	float GetSkillCooldownFraction() const;
+
+	// --- [新增] 蓝图可调用的攻击检测函数 (推荐在 Montage Notify 中调用) ---
+	UFUNCTION(BlueprintCallable, Category = "Combat|HitDetection")
+	void CheckAttackHit();
 
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
 	virtual void Die();
@@ -165,7 +197,6 @@ protected:
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
 
-	// --- [新增] 奔跑处理 ---
 	void Sprint();
 	void StopSprinting();
 
@@ -174,20 +205,17 @@ protected:
 	void PerformHeavyAttack(const FInputActionValue& Value);
 	void PerformDodge(const FInputActionValue& Value);
 
+	void PerformSpecialSkill(const FInputActionValue& Value);
+	void ResetSkillCooldown();
+
 	void ResetCombo();
 
-	/** 重置闪避的"动作"状态 (恢复移动/攻击/摩擦力) */
 	void ResetDodgeState();
-
-	/** 重置闪避的"冷却"状态 (恢复再次闪避的能力) */
 	void ResetDodgeCooldown();
 
 	// --- [RPG 保护函数] ---
-
-	/** 检查是否可以升级 (自动增加属性) */
 	void CheckLevelUp();
 
-	/** 升级事件 (蓝图可实现，用于播放特效/声音) */
 	UFUNCTION(BlueprintImplementableEvent, Category = "RPG System")
 	void OnLevelUp();
 
@@ -195,15 +223,12 @@ protected:
 	// [Idle 闲置系统]
 	// =================================================================
 
-	/** 多少秒不操作后播放闲置动画 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation|Idle")
 	float IdleWaitTime;
 
-	/** 闲置时播放的动画序列 (Anim Sequence) - [修改点] */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Animation|Idle")
 	UAnimSequence* IdleAnimSequence;
 
-	/** 更新输入时间 (如果有任何操作，调用此函数) */
 	void ResetIdleTimer();
 
 public:
@@ -221,6 +246,9 @@ private:
 	FTimerHandle DodgeResetTimer;
 	FTimerHandle DodgeCooldownTimer;
 
+	// --- 技能计时器 ---
+	FTimerHandle SkillCooldownTimer;
+
 	// --- 死亡状态管理 ---
 	bool bIsDead;
 
@@ -230,7 +258,9 @@ private:
 	// --- Idle 状态管理 ---
 	double LastInputTime;
 
-	/** [新增] 运行时生成的临时蒙太奇引用，用于停止动画 */
 	UPROPERTY()
 	UAnimMontage* CurrentIdleMontage;
+
+	UPROPERTY()
+	UAnimMontage* CurrentSkillMontage;
 };

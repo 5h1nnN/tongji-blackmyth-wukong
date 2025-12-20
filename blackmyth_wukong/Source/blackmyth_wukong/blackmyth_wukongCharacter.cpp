@@ -17,6 +17,9 @@
 #include "Animation/AnimSequence.h" 
 #include "Blueprint/UserWidget.h" 
 #include "TimerManager.h"
+// [新增] 用于检测和伤害
+#include "Kismet/KismetSystemLibrary.h"
+#include "Kismet/GameplayStatics.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
@@ -25,78 +28,66 @@ DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
 Ablackmyth_wukongCharacter::Ablackmyth_wukongCharacter()
 {
-	// 允许每帧 Tick (用于 Idle 检测)
+	// 允许每帧 Tick
 	PrimaryActorTick.bCanEverTick = true;
 
-	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
 
-	// Don't rotate when the controller rotates. Let that just affect the camera.
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
 	bUseControllerRotationRoll = false;
 
-	// Configure character movement
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
-
 	GetCharacterMovement()->JumpZVelocity = 700.f;
 	GetCharacterMovement()->AirControl = 0.35f;
 	GetCharacterMovement()->MinAnalogWalkSpeed = 20.f;
-
-	// [默认参数] 正常行走的刹车阻尼
 	GetCharacterMovement()->BrakingDecelerationWalking = 2000.f;
 	GetCharacterMovement()->BrakingDecelerationFalling = 1500.0f;
 
-	// [新增] 速度配置初始化
 	WalkSpeed = 500.0f;
 	SprintSpeed = 900.0f;
 	bIsSprinting = false;
 
-	// 应用默认速度
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
 
-	// Create a camera boom 
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	CameraBoom->SetupAttachment(RootComponent);
 	CameraBoom->TargetArmLength = 400.0f;
 	CameraBoom->bUsePawnControlRotation = true;
 
-	// Create a follow camera
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	FollowCamera->bUsePawnControlRotation = false;
 
-	// [初始化] 血量
 	MaxHealth = 100.0f;
 	CurrentHealth = MaxHealth;
 
-	// [初始化] 战斗状态
 	ComboIndex = 0;
 	bIsAttacking = false;
 	bIsDodging = false;
 	bIsDead = false;
 
-	// [初始化] 冷却参数
 	bDodgeOnCooldown = false;
 	DodgeCooldownTime = 0.5f;
 	DodgePlayRate = 1.3f;
-
-	// [修改] 提高默认冲刺力度
 	DodgeStrength = 770.0f;
 
-	// =================================================================
-	// [初始化] RPG 系统参数
-	// =================================================================
+	// [新增] 攻击范围参数初始化
+	AttackRange = 150.0f;  // 攻击距离 1.5米
+	AttackRadius = 60.0f;  // 判定半径
+	bShowHitDebug = true;  // 默认开启Debug球，方便你看效果
+
+	SkillCooldownTime = 5.0f;
+	bIsSkillOnCooldown = false;
+	CurrentSkillMontage = nullptr;
+
 	CharacterLevel = 1;
 	CurrentXP = 0.0f;
-	MaxXP = 100.0f;      // 1级升2级需要100经验
-	BaseAttackPower = 10.0f; // 初始攻击力
+	MaxXP = 100.0f;
+	BaseAttackPower = 10.0f;
 
-	// =================================================================
-	// [初始化] Idle 系统参数
-	// =================================================================
-	IdleWaitTime = 10.0f; // 默认 10 秒
+	IdleWaitTime = 10.0f;
 	LastInputTime = 0.0;
 	CurrentIdleMontage = nullptr;
 }
@@ -106,11 +97,8 @@ void Ablackmyth_wukongCharacter::BeginPlay()
 	Super::BeginPlay();
 
 	CurrentHealth = MaxHealth;
-
-	// 确保开始游戏时速度正确
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
 
-	// 确保动画速率正常
 	if (GetMesh())
 	{
 		GetMesh()->GlobalAnimRateScale = 1.0f;
@@ -123,25 +111,16 @@ void Ablackmyth_wukongCharacter::BeginPlay()
 		PC->SetInputMode(InputMode);
 	}
 
-	// 游戏开始时重置一次计时
 	ResetIdleTimer();
 }
-
-// -------------------------------------------------------------------------
-// [Idle 闲置系统] 核心逻辑
-// -------------------------------------------------------------------------
 
 void Ablackmyth_wukongCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	// 1. 如果死亡或未设置动画，直接返回
 	if (bIsDead || !IdleAnimSequence) return;
 
-	// 2. 获取当前时间
 	double CurrentTime = GetWorld()->GetTimeSeconds();
-
-	// 3. 物理检测：如果正在移动（速度 > 10）或者在空中，视为“有操作”
 	bool bIsMoving = GetVelocity().SizeSquared() > 10.0f;
 	bool bIsFalling = GetCharacterMovement()->IsFalling();
 
@@ -151,26 +130,18 @@ void Ablackmyth_wukongCharacter::Tick(float DeltaTime)
 		return;
 	}
 
-	// 4. 检查是否超时
 	if ((CurrentTime - LastInputTime) > IdleWaitTime)
 	{
 		UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
 		if (AnimInstance)
 		{
-			// 如果当前没有任何蒙太奇在播放（说明角色是纯站立状态）
 			if (!AnimInstance->IsAnyMontagePlaying())
 			{
-				// [修改点] 使用 PlaySlotAnimationAsDynamicMontage 播放 Sequence
-				// 这会自动创建一个临时的蒙太奇并返回引用
 				CurrentIdleMontage = AnimInstance->PlaySlotAnimationAsDynamicMontage(
 					IdleAnimSequence,
-					FName("DefaultSlot"), // 确保你的 AnimBP 里有 DefaultSlot 插槽
-					0.25f, // 淡入时间
-					0.25f, // 淡出时间
-					1.0f,  // 播放速率
-					1      // 循环次数 (1次)
+					FName("DefaultSlot"),
+					0.25f, 0.25f, 1.0f, 1
 				);
-
 				UE_LOG(LogTemplateCharacter, Log, TEXT("Player AFK detected. Playing Idle Animation Sequence."));
 			}
 		}
@@ -179,23 +150,18 @@ void Ablackmyth_wukongCharacter::Tick(float DeltaTime)
 
 void Ablackmyth_wukongCharacter::ResetIdleTimer()
 {
-	// 更新最后操作时间
 	if (GetWorld())
 	{
 		LastInputTime = GetWorld()->GetTimeSeconds();
 	}
 
-	// [修改点] 停止特定的临时蒙太奇
 	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
 	if (AnimInstance && CurrentIdleMontage)
 	{
-		// 检查这个临时生成的蒙太奇是否还在播放
 		if (AnimInstance->Montage_IsPlaying(CurrentIdleMontage))
 		{
-			// 0.25秒平滑停止
 			AnimInstance->Montage_Stop(0.25f, CurrentIdleMontage);
 		}
-		// 清空引用
 		CurrentIdleMontage = nullptr;
 	}
 }
@@ -221,7 +187,6 @@ void Ablackmyth_wukongCharacter::SetupPlayerInputComponent(UInputComponent* Play
 		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &Ablackmyth_wukongCharacter::Move);
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &Ablackmyth_wukongCharacter::Look);
 
-		// [新增] 奔跑绑定
 		if (SprintAction)
 		{
 			EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Started, this, &Ablackmyth_wukongCharacter::Sprint);
@@ -229,7 +194,6 @@ void Ablackmyth_wukongCharacter::SetupPlayerInputComponent(UInputComponent* Play
 			EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Canceled, this, &Ablackmyth_wukongCharacter::StopSprinting);
 		}
 
-		// 战斗绑定
 		if (LightAttackAction)
 		{
 			EnhancedInputComponent->BindAction(LightAttackAction, ETriggerEvent::Started, this, &Ablackmyth_wukongCharacter::PerformLightAttack);
@@ -243,6 +207,11 @@ void Ablackmyth_wukongCharacter::SetupPlayerInputComponent(UInputComponent* Play
 		{
 			EnhancedInputComponent->BindAction(DodgeAction, ETriggerEvent::Started, this, &Ablackmyth_wukongCharacter::PerformDodge);
 		}
+
+		if (SpecialSkillAction)
+		{
+			EnhancedInputComponent->BindAction(SpecialSkillAction, ETriggerEvent::Started, this, &Ablackmyth_wukongCharacter::PerformSpecialSkill);
+		}
 	}
 	else
 	{
@@ -252,10 +221,9 @@ void Ablackmyth_wukongCharacter::SetupPlayerInputComponent(UInputComponent* Play
 
 void Ablackmyth_wukongCharacter::Move(const FInputActionValue& Value)
 {
-	ResetIdleTimer(); // 重置 Idle 计时
+	ResetIdleTimer();
 
-	// 死亡或闪避中不可移动
-	if (bIsDead || bIsDodging) return;
+	if (bIsDead || bIsDodging || bIsAttacking) return;
 
 	FVector2D MovementVector = Value.Get<FVector2D>();
 
@@ -274,7 +242,7 @@ void Ablackmyth_wukongCharacter::Move(const FInputActionValue& Value)
 
 void Ablackmyth_wukongCharacter::Look(const FInputActionValue& Value)
 {
-	ResetIdleTimer(); // 动鼠标也算操作
+	ResetIdleTimer();
 
 	if (bIsDead) return;
 
@@ -288,22 +256,19 @@ void Ablackmyth_wukongCharacter::Look(const FInputActionValue& Value)
 }
 
 // -------------------------------------------------------------------------
-// [新增] 奔跑系统
+// [奔跑系统]
 // -------------------------------------------------------------------------
 
 void Ablackmyth_wukongCharacter::Sprint()
 {
-	ResetIdleTimer(); // 奔跑算操作
+	ResetIdleTimer();
 
-	// 死亡、闪避中、攻击中、或者正在坠落时不允许开启奔跑
 	if (bIsDead || bIsDodging || bIsAttacking) return;
 
 	bIsSprinting = true;
 	GetCharacterMovement()->MaxWalkSpeed = SprintSpeed;
 
-	// --- [核心修改] 纯C++控制动画速率 ---
 	float SpeedRatio = SprintSpeed / (WalkSpeed > KINDA_SMALL_NUMBER ? WalkSpeed : 500.0f);
-
 	if (GetMesh())
 	{
 		GetMesh()->GlobalAnimRateScale = SpeedRatio;
@@ -315,10 +280,81 @@ void Ablackmyth_wukongCharacter::StopSprinting()
 	bIsSprinting = false;
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
 
-	// --- [核心修改] 恢复正常动画速率 ---
 	if (GetMesh())
 	{
 		GetMesh()->GlobalAnimRateScale = 1.0f;
+	}
+}
+
+// -------------------------------------------------------------------------
+// [新增] 攻击判定与伤害逻辑
+// -------------------------------------------------------------------------
+
+void Ablackmyth_wukongCharacter::CheckAttackHit()
+{
+	if (bIsDead) return;
+
+	// 1. 定义起点和终点 (从角色位置向前方发射)
+	FVector Start = GetActorLocation();
+	FVector End = Start + (GetActorForwardVector() * AttackRange);
+
+	// 2. 要检测的对象类型 (Pawn 和 PhysicsBody)
+	TArray<TEnumAsByte<EObjectTypeQuery>> ObjectTypes;
+	ObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECC_Pawn));
+	ObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECC_PhysicsBody));
+	ObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECC_WorldDynamic));
+
+	// 3. 要忽略的 Actor (忽略自己)
+	TArray<AActor*> ActorsToIgnore;
+	ActorsToIgnore.Add(this);
+
+	// 4. 存储结果
+	TArray<FHitResult> OutHits;
+
+	// 5. 执行球形检测 (Sphere Trace)
+	bool bHit = UKismetSystemLibrary::SphereTraceMultiForObjects(
+		GetWorld(),
+		Start,
+		End,
+		AttackRadius,
+		ObjectTypes,
+		false, // bTraceComplex
+		ActorsToIgnore,
+		bShowHitDebug ? EDrawDebugTrace::ForDuration : EDrawDebugTrace::None, // 调试绘制
+		OutHits,
+		true // IgnoreSelf
+	);
+
+	// 6. 处理命中结果
+	if (bHit)
+	{
+		// 使用 Set 防止对同一个敌人造成多次伤害 (虽然 SphereTrace 本身通常一次返回一个 Hit per actor)
+		TSet<AActor*> HitActors;
+
+		for (const FHitResult& Hit : OutHits)
+		{
+			AActor* HitActor = Hit.GetActor();
+			if (HitActor && !HitActors.Contains(HitActor))
+			{
+				HitActors.Add(HitActor);
+
+				// 计算伤害
+				float Damage = GetTotalAttackPower();
+
+				// 应用伤害 (UE 标准接口)
+				UGameplayStatics::ApplyDamage(
+					HitActor,
+					Damage,
+					GetController(),
+					this,
+					UDamageType::StaticClass()
+				);
+
+				UE_LOG(LogTemplateCharacter, Log, TEXT("Hit Enemy: %s, Damage: %f"), *HitActor->GetName(), Damage);
+
+				// 这里可以添加命中特效 SpawnEmitterAtLocation...
+			}
+		}
 	}
 }
 
@@ -328,18 +364,18 @@ void Ablackmyth_wukongCharacter::StopSprinting()
 
 void Ablackmyth_wukongCharacter::PerformLightAttack(const FInputActionValue& Value)
 {
-	ResetIdleTimer(); // 攻击算操作
+	ResetIdleTimer();
 
 	if (bIsDead || bIsDodging) return;
 	if (LightAttackMontages.Num() == 0) return;
 
-	// 攻击时强制停止奔跑
 	StopSprinting();
 
 	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
 	if (!AnimInstance) return;
 
 	if (HeavyAttackMontage && AnimInstance->Montage_IsPlaying(HeavyAttackMontage)) return;
+	if (CurrentSkillMontage && AnimInstance->Montage_IsPlaying(CurrentSkillMontage)) return;
 
 	if (ComboIndex >= LightAttackMontages.Num()) ComboIndex = 0;
 
@@ -348,8 +384,14 @@ void Ablackmyth_wukongCharacter::PerformLightAttack(const FInputActionValue& Val
 	if (MontageToPlay)
 	{
 		AnimInstance->Montage_Play(MontageToPlay);
+
 		bIsAttacking = true;
 		ComboIndex++;
+
+		// [核心新增] 设置定时器在动作播放 0.2 秒后进行攻击判定
+		// 注意：最好的做法是在 Montage 中添加 Notify，这里用 Timer 模拟以便代码直接生效
+		FTimerHandle HitCheckTimer;
+		GetWorldTimerManager().SetTimer(HitCheckTimer, this, &Ablackmyth_wukongCharacter::CheckAttackHit, 0.2f, false);
 
 		GetWorldTimerManager().ClearTimer(ComboResetTimer);
 		GetWorldTimerManager().SetTimer(ComboResetTimer, this, &Ablackmyth_wukongCharacter::ResetCombo, 1.2f, false);
@@ -358,20 +400,26 @@ void Ablackmyth_wukongCharacter::PerformLightAttack(const FInputActionValue& Val
 
 void Ablackmyth_wukongCharacter::PerformHeavyAttack(const FInputActionValue& Value)
 {
-	ResetIdleTimer(); // 攻击算操作
+	ResetIdleTimer();
 
 	if (bIsDead || bIsDodging || !HeavyAttackMontage) return;
 
-	// 攻击时强制停止奔跑
 	StopSprinting();
 
 	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
 	if (!AnimInstance) return;
 
+	if (CurrentSkillMontage && AnimInstance->Montage_IsPlaying(CurrentSkillMontage)) return;
+
 	if (!AnimInstance->Montage_IsPlaying(HeavyAttackMontage))
 	{
 		AnimInstance->StopAllMontages(0.2f);
 		AnimInstance->Montage_Play(HeavyAttackMontage);
+
+		// [核心新增] 重攻击稍慢一点判定 (0.4秒)
+		FTimerHandle HitCheckTimer;
+		GetWorldTimerManager().SetTimer(HitCheckTimer, this, &Ablackmyth_wukongCharacter::CheckAttackHit, 0.4f, false);
+
 		ResetCombo();
 	}
 }
@@ -384,17 +432,15 @@ void Ablackmyth_wukongCharacter::ResetCombo()
 
 void Ablackmyth_wukongCharacter::PerformDodge(const FInputActionValue& Value)
 {
-	ResetIdleTimer(); // 闪避算操作
+	ResetIdleTimer();
 
 	if (bIsDead || bIsDodging || bDodgeOnCooldown || !DodgeAnimSequence) return;
 
-	// 闪避时停止奔跑状态
 	StopSprinting();
 
 	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
 	if (!AnimInstance) return;
 
-	// --- 1. 计算闪避方向 ---
 	FVector InputDir = GetLastMovementInputVector();
 	FVector FinalDodgeDir;
 
@@ -407,32 +453,14 @@ void Ablackmyth_wukongCharacter::PerformDodge(const FInputActionValue& Value)
 		FinalDodgeDir = InputDir.GetSafeNormal();
 	}
 
-	// --- 2. 物理状态重置 ---
-	bool bIsFalling = GetCharacterMovement()->IsFalling();
-
-	if (bIsFalling)
-	{
-		FVector CurrentVel = GetCharacterMovement()->Velocity;
-		GetCharacterMovement()->Velocity = FVector(0.f, 0.f, CurrentVel.Z);
-	}
-	else
-	{
-		GetCharacterMovement()->Velocity = FVector::ZeroVector;
-		GetCharacterMovement()->StopMovementImmediately();
-
-		GetCharacterMovement()->GroundFriction = 0.0f;
-		GetCharacterMovement()->BrakingDecelerationWalking = 0.0f;
-	}
-
-	// --- 3. 播放动画 ---
 	ResetCombo();
 	AnimInstance->StopAllMontages(0.1f);
+
 	AnimInstance->PlaySlotAnimationAsDynamicMontage(
 		DodgeAnimSequence,
 		FName("DefaultSlot"),
 		0.1f, 0.2f, DodgePlayRate, 1);
 
-	// --- 4. 设置状态与计时器 ---
 	bIsDodging = true;
 	bDodgeOnCooldown = true;
 
@@ -441,8 +469,21 @@ void Ablackmyth_wukongCharacter::PerformDodge(const FInputActionValue& Value)
 	GetWorldTimerManager().SetTimer(DodgeResetTimer, this, &Ablackmyth_wukongCharacter::ResetDodgeState, AnimDuration, false);
 	GetWorldTimerManager().SetTimer(DodgeCooldownTimer, this, &Ablackmyth_wukongCharacter::ResetDodgeCooldown, DodgeCooldownTime, false);
 
-	// --- 5. 施加爆发力 ---
-	LaunchCharacter(FinalDodgeDir * DodgeStrength, true, true);
+	bool bIsFalling = GetCharacterMovement()->IsFalling();
+
+	if (bIsFalling)
+	{
+		GetCharacterMovement()->BrakingDecelerationFalling = 0.0f;
+		LaunchCharacter(FinalDodgeDir * DodgeStrength, true, false);
+	}
+	else
+	{
+		GetCharacterMovement()->Velocity = FVector::ZeroVector;
+		GetCharacterMovement()->StopMovementImmediately();
+		GetCharacterMovement()->GroundFriction = 0.0f;
+		GetCharacterMovement()->BrakingDecelerationWalking = 0.0f;
+		LaunchCharacter(FinalDodgeDir * DodgeStrength, true, true);
+	}
 }
 
 void Ablackmyth_wukongCharacter::ResetDodgeState()
@@ -451,9 +492,9 @@ void Ablackmyth_wukongCharacter::ResetDodgeState()
 
 	bIsDodging = false;
 
-	// [核心修复] 恢复正常的物理参数
 	GetCharacterMovement()->GroundFriction = 8.0f;
 	GetCharacterMovement()->BrakingDecelerationWalking = 2000.0f;
+	GetCharacterMovement()->BrakingDecelerationFalling = 1500.0f;
 }
 
 void Ablackmyth_wukongCharacter::ResetDodgeCooldown()
@@ -461,11 +502,87 @@ void Ablackmyth_wukongCharacter::ResetDodgeCooldown()
 	bDodgeOnCooldown = false;
 }
 
+// -------------------------------------------------------------------------
+// [特殊技能系统]
+// -------------------------------------------------------------------------
+
+void Ablackmyth_wukongCharacter::PerformSpecialSkill(const FInputActionValue& Value)
+{
+	if (bIsDead || bIsSkillOnCooldown || bIsDodging)
+	{
+		return;
+	}
+
+	if (!SpecialSkillAnimSequence)
+	{
+		return;
+	}
+
+	ResetIdleTimer();
+	StopSprinting();
+	GetCharacterMovement()->StopMovementImmediately();
+
+	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+	if (AnimInstance)
+	{
+		AnimInstance->StopAllMontages(0.2f);
+
+		CurrentSkillMontage = AnimInstance->PlaySlotAnimationAsDynamicMontage(
+			SpecialSkillAnimSequence,
+			FName("DefaultSlot"),
+			0.2f, 0.2f, 1.0f, 1
+		);
+
+		ResetCombo();
+		bIsAttacking = true;
+
+		// [核心新增] 技能攻击判定 (0.3秒)
+		FTimerHandle HitCheckTimer;
+		GetWorldTimerManager().SetTimer(HitCheckTimer, this, &Ablackmyth_wukongCharacter::CheckAttackHit, 0.3f, false);
+
+		float AnimLength = SpecialSkillAnimSequence->GetPlayLength();
+		FTimerHandle SkillAnimTimer;
+		GetWorldTimerManager().SetTimer(SkillAnimTimer, [this]()
+			{
+				if (!bIsDead && !bIsDodging)
+				{
+					bIsAttacking = false;
+					CurrentSkillMontage = nullptr;
+				}
+			}, AnimLength, false);
+	}
+
+	bIsSkillOnCooldown = true;
+	GetWorldTimerManager().SetTimer(SkillCooldownTimer, this, &Ablackmyth_wukongCharacter::ResetSkillCooldown, SkillCooldownTime, false);
+
+	UE_LOG(LogTemplateCharacter, Log, TEXT("Special Skill Used! Cooldown: %f"), SkillCooldownTime);
+}
+
+void Ablackmyth_wukongCharacter::ResetSkillCooldown()
+{
+	bIsSkillOnCooldown = false;
+	UE_LOG(LogTemplateCharacter, Log, TEXT("Special Skill Ready!"));
+}
+
+float Ablackmyth_wukongCharacter::GetSkillCooldownFraction() const
+{
+	if (GetWorldTimerManager().IsTimerActive(SkillCooldownTimer))
+	{
+		float Remaining = GetWorldTimerManager().GetTimerRemaining(SkillCooldownTimer);
+		float Total = SkillCooldownTime > 0.f ? SkillCooldownTime : 1.f;
+		return FMath::Clamp(Remaining / Total, 0.0f, 1.0f);
+	}
+	return 0.0f;
+}
+
+// -------------------------------------------------------------------------
+// [RPG/Damage 系统]
+// -------------------------------------------------------------------------
+
 float Ablackmyth_wukongCharacter::TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser)
 {
 	if (bIsDead) return 0.0f;
 
-	// 受击也算操作（防止挨打时播放耍棍子动画）
 	ResetIdleTimer();
 
 	float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
@@ -486,7 +603,6 @@ void Ablackmyth_wukongCharacter::Die()
 	if (bIsDead) return;
 	bIsDead = true;
 
-	// 死亡停止一切动作
 	StopSprinting();
 
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
@@ -504,6 +620,7 @@ void Ablackmyth_wukongCharacter::Die()
 	GetWorldTimerManager().ClearTimer(DodgeResetTimer);
 	GetWorldTimerManager().ClearTimer(DodgeCooldownTimer);
 	GetWorldTimerManager().ClearTimer(ComboResetTimer);
+	GetWorldTimerManager().ClearTimer(SkillCooldownTimer);
 
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
@@ -516,10 +633,7 @@ void Ablackmyth_wukongCharacter::Die()
 		AnimInstance->PlaySlotAnimationAsDynamicMontage(
 			DeathAnimSequence,
 			FName("DefaultSlot"),
-			0.25f,
-			BlendOutTime,
-			1.0f,
-			1
+			0.25f, 0.25f, 1.0f, 1
 		);
 
 		float RagdollDelay = FMath::Max(0.0f, AnimLength - BlendOutTime);
@@ -561,49 +675,30 @@ void Ablackmyth_wukongCharacter::Die()
 	}
 }
 
-// -------------------------------------------------------------------------
-// [RPG 升级系统 实现]
-// -------------------------------------------------------------------------
-
 void Ablackmyth_wukongCharacter::GainExperience(float Amount)
 {
 	if (bIsDead) return;
-
 	CurrentXP += Amount;
 	UE_LOG(LogTemplateCharacter, Log, TEXT("Gained XP: %f. Total: %f / %f"), Amount, CurrentXP, MaxXP);
-
-	// 循环检查是否满足升级条件
 	CheckLevelUp();
 }
 
 void Ablackmyth_wukongCharacter::CheckLevelUp()
 {
-	// 使用 while 循环，防止经验值过多需要连升几级的情况
 	while (CurrentXP >= MaxXP)
 	{
 		CurrentXP -= MaxXP;
 		CharacterLevel++;
-
-		// --- [自动成长逻辑] ---
-		// 每次升级自动增加属性，不再需要手动分配点数
-		MaxHealth += 20.0f;       // 生命上限 +20
-		BaseAttackPower += 5.0f;  // 攻击力 +5
-
-		// 升级曲线：每级所需经验增加 50%
+		MaxHealth += 20.0f;
+		BaseAttackPower += 5.0f;
 		MaxXP = MaxXP * 1.5f;
-
-		// 升级时回满血 (恢复到新的 MaxHealth)
 		CurrentHealth = MaxHealth;
-
 		UE_LOG(LogTemplateCharacter, Log, TEXT("Level Up! New Level: %d. Stats Increased."), CharacterLevel);
-
-		// 调用蓝图事件 (播放特效/UI提示)
 		OnLevelUp();
 	}
 }
 
 float Ablackmyth_wukongCharacter::GetTotalAttackPower() const
 {
-	// 返回当前成长的攻击力
 	return BaseAttackPower;
 }
