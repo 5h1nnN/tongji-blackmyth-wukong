@@ -10,9 +10,13 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
-// [新增] 引入动画相关头文件
+
+// 必须引用的头文件
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimInstance.h"
+#include "Animation/AnimSequence.h" 
+#include "Blueprint/UserWidget.h" 
+#include "TimerManager.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
@@ -30,37 +34,61 @@ Ablackmyth_wukongCharacter::Ablackmyth_wukongCharacter()
 	bUseControllerRotationRoll = false;
 
 	// Configure character movement
-	GetCharacterMovement()->bOrientRotationToMovement = true; // Character moves in the direction of input...	
-	GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f); // ...at this rotation rate
+	GetCharacterMovement()->bOrientRotationToMovement = true;
+	GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
 
-	// Note: For faster iteration times these variables, and many more, can be tweaked in the Character Blueprint
-	// instead of recompiling to adjust them
 	GetCharacterMovement()->JumpZVelocity = 700.f;
 	GetCharacterMovement()->AirControl = 0.35f;
 	GetCharacterMovement()->MaxWalkSpeed = 500.f;
 	GetCharacterMovement()->MinAnalogWalkSpeed = 20.f;
+
+	// [默认参数] 正常行走的刹车阻尼
 	GetCharacterMovement()->BrakingDecelerationWalking = 2000.f;
 	GetCharacterMovement()->BrakingDecelerationFalling = 1500.0f;
 
-	// Create a camera boom (pulls in towards the player if there is a collision)
+	// Create a camera boom 
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	CameraBoom->SetupAttachment(RootComponent);
-	CameraBoom->TargetArmLength = 400.0f; // The camera follows at this distance behind the character	
-	CameraBoom->bUsePawnControlRotation = true; // Rotate the arm based on the controller
+	CameraBoom->TargetArmLength = 400.0f;
+	CameraBoom->bUsePawnControlRotation = true;
 
 	// Create a follow camera
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
-	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName); // Attach the camera to the end of the boom and let the boom adjust to match the controller orientation
-	FollowCamera->bUsePawnControlRotation = false; // Camera does not rotate relative to arm
+	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
+	FollowCamera->bUsePawnControlRotation = false;
 
-	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character) 
-	// are set in the derived blueprint asset named ThirdPersonCharacter (to avoid direct content references in C++)
+	// [初始化] 血量
+	MaxHealth = 100.0f;
+	CurrentHealth = MaxHealth;
+
+	// [初始化] 战斗状态
+	ComboIndex = 0;
+	bIsAttacking = false;
+	bIsDodging = false;
+	bIsDead = false;
+
+	// [初始化] 冷却参数
+	bDodgeOnCooldown = false;
+	DodgeCooldownTime = 0.5f;
+	DodgePlayRate = 1.3f; // 建议根据动画实际速度微调，越快滑动时间越短
+
+	// [修改] 提高默认冲刺力度
+	// 由于我们现在加大了闪避时的阻尼(8000)，需要很大的力才能推出去
+	DodgeStrength = 770.0f;
 }
 
 void Ablackmyth_wukongCharacter::BeginPlay()
 {
-	// Call the base class  
 	Super::BeginPlay();
+
+	CurrentHealth = MaxHealth;
+
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		PC->bShowMouseCursor = false;
+		FInputModeGameOnly InputMode;
+		PC->SetInputMode(InputMode);
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -68,7 +96,6 @@ void Ablackmyth_wukongCharacter::BeginPlay()
 
 void Ablackmyth_wukongCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
-	// Add Input Mapping Context
 	if (APlayerController* PlayerController = Cast<APlayerController>(GetController()))
 	{
 		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
@@ -77,50 +104,50 @@ void Ablackmyth_wukongCharacter::SetupPlayerInputComponent(UInputComponent* Play
 		}
 	}
 
-	// Set up action bindings
 	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent)) {
 
-		// Jumping
 		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Started, this, &ACharacter::Jump);
 		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
 
-		// Moving
 		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &Ablackmyth_wukongCharacter::Move);
-
-		// Looking
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &Ablackmyth_wukongCharacter::Look);
 
-		// [新增] Attacking - 绑定攻击事件
-		// 注意：这里加了一个判断，确保你在蓝图里设置了 AttackAction，否则不会绑定
-		if (AttackAction)
+		// 战斗绑定
+		if (LightAttackAction)
 		{
-			EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Started, this, &Ablackmyth_wukongCharacter::Attack);
+			EnhancedInputComponent->BindAction(LightAttackAction, ETriggerEvent::Started, this, &Ablackmyth_wukongCharacter::PerformLightAttack);
+		}
+		if (HeavyAttackAction)
+		{
+			EnhancedInputComponent->BindAction(HeavyAttackAction, ETriggerEvent::Started, this, &Ablackmyth_wukongCharacter::PerformHeavyAttack);
+		}
+
+		if (DodgeAction)
+		{
+			EnhancedInputComponent->BindAction(DodgeAction, ETriggerEvent::Started, this, &Ablackmyth_wukongCharacter::PerformDodge);
 		}
 	}
 	else
 	{
-		UE_LOG(LogTemplateCharacter, Error, TEXT("'%s' Failed to find an Enhanced Input component! This template is built to use the Enhanced Input system. If you intend to use the legacy system, then you will need to update this C++ file."), *GetNameSafe(this));
+		UE_LOG(LogTemplateCharacter, Error, TEXT("'%s' Failed to find an Enhanced Input component!"), *GetNameSafe(this));
 	}
 }
 
 void Ablackmyth_wukongCharacter::Move(const FInputActionValue& Value)
 {
-	// input is a Vector2D
+	// 死亡或闪避中不可移动
+	if (bIsDead || bIsDodging) return;
+
 	FVector2D MovementVector = Value.Get<FVector2D>();
 
 	if (Controller != nullptr)
 	{
-		// find out which way is forward
 		const FRotator Rotation = Controller->GetControlRotation();
 		const FRotator YawRotation(0, Rotation.Yaw, 0);
 
-		// get forward vector
 		const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
-
-		// get right vector 
 		const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
 
-		// add movement 
 		AddMovementInput(ForwardDirection, MovementVector.Y);
 		AddMovementInput(RightDirection, MovementVector.X);
 	}
@@ -128,38 +155,236 @@ void Ablackmyth_wukongCharacter::Move(const FInputActionValue& Value)
 
 void Ablackmyth_wukongCharacter::Look(const FInputActionValue& Value)
 {
-	// input is a Vector2D
+	if (bIsDead) return;
+
 	FVector2D LookAxisVector = Value.Get<FVector2D>();
 
 	if (Controller != nullptr)
 	{
-		// add yaw and pitch input to controller
 		AddControllerYawInput(LookAxisVector.X);
 		AddControllerPitchInput(LookAxisVector.Y);
 	}
 }
 
-// [新增] 攻击函数实现
-void Ablackmyth_wukongCharacter::Attack(const FInputActionValue& Value)
+// -------------------------------------------------------------------------
+// [战斗系统]
+// -------------------------------------------------------------------------
+
+void Ablackmyth_wukongCharacter::PerformLightAttack(const FInputActionValue& Value)
 {
-	// 1. 确保在蓝图中分配了 AttackMontage
-	if (AttackMontage)
+	if (bIsDead || bIsDodging) return;
+	if (LightAttackMontages.Num() == 0) return;
+
+	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+	if (!AnimInstance) return;
+
+	if (HeavyAttackMontage && AnimInstance->Montage_IsPlaying(HeavyAttackMontage)) return;
+
+	if (ComboIndex >= LightAttackMontages.Num()) ComboIndex = 0;
+
+	UAnimMontage* MontageToPlay = LightAttackMontages[ComboIndex];
+
+	if (MontageToPlay)
 	{
-		// 2. 获取角色的动画实例 (Anim Instance)
-		UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
-		if (AnimInstance)
-		{
-			// 3. 播放蒙太奇
-			// 只有当该蒙太奇当前没有播放时才播放（防止连点时鬼畜，如果你要做连招系统，这里逻辑会更复杂）
-			if (!AnimInstance->Montage_IsPlaying(AttackMontage))
-			{
-				AnimInstance->Montage_Play(AttackMontage, 1.0f);
-			}
-		}
+		AnimInstance->Montage_Play(MontageToPlay);
+		bIsAttacking = true;
+		ComboIndex++;
+
+		GetWorldTimerManager().ClearTimer(ComboResetTimer);
+		GetWorldTimerManager().SetTimer(ComboResetTimer, this, &Ablackmyth_wukongCharacter::ResetCombo, 1.2f, false);
+	}
+}
+
+void Ablackmyth_wukongCharacter::PerformHeavyAttack(const FInputActionValue& Value)
+{
+	if (bIsDead || bIsDodging || !HeavyAttackMontage) return;
+
+	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+	if (!AnimInstance) return;
+
+	if (!AnimInstance->Montage_IsPlaying(HeavyAttackMontage))
+	{
+		AnimInstance->StopAllMontages(0.2f);
+		AnimInstance->Montage_Play(HeavyAttackMontage);
+		ResetCombo();
+	}
+}
+
+void Ablackmyth_wukongCharacter::ResetCombo()
+{
+	ComboIndex = 0;
+	bIsAttacking = false;
+}
+
+// [修改] 完美匹配动画时长与物理滑行
+void Ablackmyth_wukongCharacter::PerformDodge(const FInputActionValue& Value)
+{
+	if (bIsDead || bIsDodging || bDodgeOnCooldown || !DodgeAnimSequence) return;
+
+	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+	if (!AnimInstance) return;
+
+	// --- 1. 计算闪避方向 ---
+	FVector FinalDodgeDir;
+	FVector InputDir = GetLastMovementInputVector();
+
+	if (InputDir.IsNearlyZero())
+	{
+		// 无输入则后撤
+		FinalDodgeDir = GetActorForwardVector();
 	}
 	else
 	{
-		// 调试信息：如果你按了攻击键但没反应，看看输出日志里有没有这句话
-		UE_LOG(LogTemplateCharacter, Warning, TEXT("Attack Montage not assigned in Character Blueprint!"));
+		// 有输入则按输入方向
+		FinalDodgeDir = InputDir.GetSafeNormal();
+	}
+
+	// --- 2. 物理状态重置 (关键步骤) ---
+	// 彻底清除之前的跑步速度，避免惯性叠加
+	GetCharacterMovement()->Velocity = FVector::ZeroVector;
+	GetCharacterMovement()->StopMovementImmediately();
+
+	// [核心修改 A] 临时大幅提高刹车阻尼
+	// 让角色在冲刺后能迅速停下，而不是像冰面一样滑很远
+	// 8000.0f 是一个比较强的值，配合 4000.0f 的 DodgeStrength
+	//GetCharacterMovement()->BrakingDecelerationWalking = 0.0f;
+	// 坏文明：消除了摩擦力，导致像在溜冰
+	GetCharacterMovement()->GroundFriction = 0.0f;
+	GetCharacterMovement()->BrakingDecelerationWalking = 0.0f;
+
+	// --- 3. 播放动画 ---
+	ResetCombo();
+	AnimInstance->StopAllMontages(0.1f);
+	AnimInstance->PlaySlotAnimationAsDynamicMontage(
+		DodgeAnimSequence,
+		FName("DefaultSlot"),
+		0.1f, 0.2f, DodgePlayRate, 1);
+
+	// --- 4. 设置状态与计时器 ---
+	bIsDodging = true;
+	bDodgeOnCooldown = true;
+
+	float AnimDuration = DodgeAnimSequence->GetPlayLength() / DodgePlayRate;
+
+	// 动画结束时调用 ResetDodgeState
+	GetWorldTimerManager().SetTimer(DodgeResetTimer, this, &Ablackmyth_wukongCharacter::ResetDodgeState, AnimDuration, false);
+	GetWorldTimerManager().SetTimer(DodgeCooldownTimer, this, &Ablackmyth_wukongCharacter::ResetDodgeCooldown, DodgeCooldownTime, false);
+
+	// --- 5. 施加爆发力 ---
+	// 使用覆盖模式 (Override)，确保力道准确
+	LaunchCharacter(FinalDodgeDir * DodgeStrength, true, true);
+}
+
+void Ablackmyth_wukongCharacter::ResetDodgeState()
+{
+	if (bIsDead) return;
+
+	bIsDodging = false;
+
+	// [核心修改 B] 动画结束瞬间，强制刹车
+	// 确保"动画停，脚就停"，解决滑步过头的问题
+	GetCharacterMovement()->StopMovementImmediately();
+
+	// [核心修改 C] 恢复正常的刹车阻尼
+	// 恢复成构造函数里设置的 2000.0f，保证后续正常走路手感
+	GetCharacterMovement()->BrakingDecelerationWalking = 2000.0f;
+}
+
+void Ablackmyth_wukongCharacter::ResetDodgeCooldown()
+{
+	bDodgeOnCooldown = false;
+}
+
+float Ablackmyth_wukongCharacter::TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser)
+{
+	if (bIsDead) return 0.0f;
+
+	float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+
+	CurrentHealth = FMath::Clamp(CurrentHealth - ActualDamage, 0.0f, MaxHealth);
+	UE_LOG(LogTemplateCharacter, Warning, TEXT("Took Damage: %f, Health: %f"), ActualDamage, CurrentHealth);
+
+	if (CurrentHealth <= 0.0f)
+	{
+		Die();
+	}
+
+	return ActualDamage;
+}
+
+void Ablackmyth_wukongCharacter::Die()
+{
+	if (bIsDead) return;
+	bIsDead = true;
+
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		DisableInput(PC);
+	}
+
+	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+	if (AnimInstance)
+	{
+		AnimInstance->StopAllMontages(0.2f);
+	}
+	ResetCombo();
+
+	GetWorldTimerManager().ClearTimer(DodgeResetTimer);
+	GetWorldTimerManager().ClearTimer(DodgeCooldownTimer);
+	GetWorldTimerManager().ClearTimer(ComboResetTimer);
+
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+
+	if (DeathAnimSequence && AnimInstance)
+	{
+		float AnimLength = DeathAnimSequence->GetPlayLength();
+		float BlendOutTime = 0.25f;
+
+		AnimInstance->PlaySlotAnimationAsDynamicMontage(
+			DeathAnimSequence,
+			FName("DefaultSlot"),
+			0.25f,
+			BlendOutTime,
+			1.0f,
+			1
+		);
+
+		float RagdollDelay = FMath::Max(0.0f, AnimLength - BlendOutTime);
+
+		FTimerHandle TimerHandle_Ragdoll;
+		GetWorldTimerManager().SetTimer(TimerHandle_Ragdoll, [this]()
+			{
+				GetMesh()->SetSimulatePhysics(true);
+				GetMesh()->SetCollisionProfileName(TEXT("Ragdoll"));
+				GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+				GetMesh()->bPauseAnims = true;
+			}, RagdollDelay, false);
+	}
+	else
+	{
+		GetMesh()->SetSimulatePhysics(true);
+		GetMesh()->SetCollisionProfileName(TEXT("Ragdoll"));
+		GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
+
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		FTimerHandle TimerHandle_ShowUI;
+		GetWorldTimerManager().SetTimer(TimerHandle_ShowUI, [this, PC]()
+			{
+				if (GameOverWidgetClass)
+				{
+					UUserWidget* Widget = CreateWidget<UUserWidget>(GetWorld(), GameOverWidgetClass);
+					if (Widget)
+					{
+						Widget->AddToViewport();
+						PC->bShowMouseCursor = true;
+						FInputModeUIOnly InputMode;
+						InputMode.SetWidgetToFocus(Widget->TakeWidget());
+						PC->SetInputMode(InputMode);
+					}
+				}
+			}, 2.0f, false);
 	}
 }
