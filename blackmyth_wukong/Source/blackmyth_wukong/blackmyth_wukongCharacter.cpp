@@ -11,7 +11,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 
-// ±ØĞëÒıÓÃµÄÍ·ÎÄ¼ş
+// å¿…é¡»å¼•ç”¨çš„å¤´æ–‡ä»¶
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimSequence.h" 
@@ -25,7 +25,7 @@ DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
 Ablackmyth_wukongCharacter::Ablackmyth_wukongCharacter()
 {
-	// ÔÊĞíÃ¿Ö¡ Tick (ÓÃÓÚ Idle ¼ì²â)
+	// å…è®¸æ¯å¸§ Tick (ç”¨äº Idle æ£€æµ‹)
 	PrimaryActorTick.bCanEverTick = true;
 
 	// Set size for collision capsule
@@ -44,16 +44,16 @@ Ablackmyth_wukongCharacter::Ablackmyth_wukongCharacter()
 	GetCharacterMovement()->AirControl = 0.35f;
 	GetCharacterMovement()->MinAnalogWalkSpeed = 20.f;
 
-	// [Ä¬ÈÏ²ÎÊı] Õı³£ĞĞ×ßµÄÉ²³µ×èÄá
+	// [é»˜è®¤å‚æ•°] æ­£å¸¸è¡Œèµ°çš„åˆ¹è½¦é˜»å°¼
 	GetCharacterMovement()->BrakingDecelerationWalking = 2000.f;
 	GetCharacterMovement()->BrakingDecelerationFalling = 1500.0f;
 
-	// [ĞÂÔö] ËÙ¶ÈÅäÖÃ³õÊ¼»¯
+	// [æ–°å¢] é€Ÿåº¦é…ç½®åˆå§‹åŒ–
 	WalkSpeed = 500.0f;
 	SprintSpeed = 900.0f;
 	bIsSprinting = false;
 
-	// Ó¦ÓÃÄ¬ÈÏËÙ¶È
+	// åº”ç”¨é»˜è®¤é€Ÿåº¦
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
 
 	// Create a camera boom 
@@ -67,36 +67,36 @@ Ablackmyth_wukongCharacter::Ablackmyth_wukongCharacter()
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	FollowCamera->bUsePawnControlRotation = false;
 
-	// [³õÊ¼»¯] ÑªÁ¿
+	// [åˆå§‹åŒ–] è¡€é‡
 	MaxHealth = 100.0f;
 	CurrentHealth = MaxHealth;
 
-	// [³õÊ¼»¯] Õ½¶·×´Ì¬
+	// [åˆå§‹åŒ–] æˆ˜æ–—çŠ¶æ€
 	ComboIndex = 0;
 	bIsAttacking = false;
 	bIsDodging = false;
 	bIsDead = false;
 
-	// [³õÊ¼»¯] ÀäÈ´²ÎÊı
+	// [åˆå§‹åŒ–] å†·å´å‚æ•°
 	bDodgeOnCooldown = false;
 	DodgeCooldownTime = 0.5f;
 	DodgePlayRate = 1.3f;
 
-	// [ĞŞ¸Ä] Ìá¸ßÄ¬ÈÏ³å´ÌÁ¦¶È
+	// [ä¿®æ”¹] æé«˜é»˜è®¤å†²åˆºåŠ›åº¦
 	DodgeStrength = 770.0f;
 
 	// =================================================================
-	// [³õÊ¼»¯] RPG ÏµÍ³²ÎÊı
+	// [åˆå§‹åŒ–] RPG ç³»ç»Ÿå‚æ•°
 	// =================================================================
 	CharacterLevel = 1;
 	CurrentXP = 0.0f;
-	MaxXP = 100.0f;      // 1¼¶Éı2¼¶ĞèÒª100¾­Ñé
-	BaseAttackPower = 10.0f; // ³õÊ¼¹¥»÷Á¦
+	MaxXP = 100.0f;      // 1çº§å‡2çº§éœ€è¦100ç»éªŒ
+	BaseAttackPower = 10.0f; // åˆå§‹æ”»å‡»åŠ›
 
 	// =================================================================
-	// [³õÊ¼»¯] Idle ÏµÍ³²ÎÊı
+	// [åˆå§‹åŒ–] Idle ç³»ç»Ÿå‚æ•°
 	// =================================================================
-	IdleWaitTime = 10.0f; // Ä¬ÈÏ 10 Ãë
+	IdleWaitTime = 10.0f; // é»˜è®¤ 10 ç§’
 	LastInputTime = 0.0;
 	CurrentIdleMontage = nullptr;
 }
@@ -107,10 +107,10 @@ void Ablackmyth_wukongCharacter::BeginPlay()
 
 	CurrentHealth = MaxHealth;
 
-	// È·±£¿ªÊ¼ÓÎÏ·Ê±ËÙ¶ÈÕıÈ·
+	// ç¡®ä¿å¼€å§‹æ¸¸æˆæ—¶é€Ÿåº¦æ­£ç¡®
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
 
-	// È·±£¶¯»­ËÙÂÊÕı³£
+	// ç¡®ä¿åŠ¨ç”»é€Ÿç‡æ­£å¸¸
 	if (GetMesh())
 	{
 		GetMesh()->GlobalAnimRateScale = 1.0f;
@@ -123,25 +123,25 @@ void Ablackmyth_wukongCharacter::BeginPlay()
 		PC->SetInputMode(InputMode);
 	}
 
-	// ÓÎÏ·¿ªÊ¼Ê±ÖØÖÃÒ»´Î¼ÆÊ±
+	// æ¸¸æˆå¼€å§‹æ—¶é‡ç½®ä¸€æ¬¡è®¡æ—¶
 	ResetIdleTimer();
 }
 
 // -------------------------------------------------------------------------
-// [Idle ÏĞÖÃÏµÍ³] ºËĞÄÂß¼­
+// [Idle é—²ç½®ç³»ç»Ÿ] æ ¸å¿ƒé€»è¾‘
 // -------------------------------------------------------------------------
 
 void Ablackmyth_wukongCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	// 1. Èç¹ûËÀÍö»òÎ´ÉèÖÃ¶¯»­£¬Ö±½Ó·µ»Ø
+	// 1. å¦‚æœæ­»äº¡æˆ–æœªè®¾ç½®åŠ¨ç”»ï¼Œç›´æ¥è¿”å›
 	if (bIsDead || !IdleAnimSequence) return;
 
-	// 2. »ñÈ¡µ±Ç°Ê±¼ä
+	// 2. è·å–å½“å‰æ—¶é—´
 	double CurrentTime = GetWorld()->GetTimeSeconds();
 
-	// 3. ÎïÀí¼ì²â£ºÈç¹ûÕıÔÚÒÆ¶¯£¨ËÙ¶È > 10£©»òÕßÔÚ¿ÕÖĞ£¬ÊÓÎª¡°ÓĞ²Ù×÷¡±
+	// 3. ç‰©ç†æ£€æµ‹ï¼šå¦‚æœæ­£åœ¨ç§»åŠ¨ï¼ˆé€Ÿåº¦ > 10ï¼‰æˆ–è€…åœ¨ç©ºä¸­ï¼Œè§†ä¸ºâ€œæœ‰æ“ä½œâ€
 	bool bIsMoving = GetVelocity().SizeSquared() > 10.0f;
 	bool bIsFalling = GetCharacterMovement()->IsFalling();
 
@@ -151,24 +151,24 @@ void Ablackmyth_wukongCharacter::Tick(float DeltaTime)
 		return;
 	}
 
-	// 4. ¼ì²éÊÇ·ñ³¬Ê±
+	// 4. æ£€æŸ¥æ˜¯å¦è¶…æ—¶
 	if ((CurrentTime - LastInputTime) > IdleWaitTime)
 	{
 		UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
 		if (AnimInstance)
 		{
-			// Èç¹ûµ±Ç°Ã»ÓĞÈÎºÎÃÉÌ«ÆæÔÚ²¥·Å£¨ËµÃ÷½ÇÉ«ÊÇ´¿Õ¾Á¢×´Ì¬£©
+			// å¦‚æœå½“å‰æ²¡æœ‰ä»»ä½•è’™å¤ªå¥‡åœ¨æ’­æ”¾ï¼ˆè¯´æ˜è§’è‰²æ˜¯çº¯ç«™ç«‹çŠ¶æ€ï¼‰
 			if (!AnimInstance->IsAnyMontagePlaying())
 			{
-				// [ĞŞ¸Äµã] Ê¹ÓÃ PlaySlotAnimationAsDynamicMontage ²¥·Å Sequence
-				// Õâ»á×Ô¶¯´´½¨Ò»¸öÁÙÊ±µÄÃÉÌ«Ææ²¢·µ»ØÒıÓÃ
+				// [ä¿®æ”¹ç‚¹] ä½¿ç”¨ PlaySlotAnimationAsDynamicMontage æ’­æ”¾ Sequence
+				// è¿™ä¼šè‡ªåŠ¨åˆ›å»ºä¸€ä¸ªä¸´æ—¶çš„è’™å¤ªå¥‡å¹¶è¿”å›å¼•ç”¨
 				CurrentIdleMontage = AnimInstance->PlaySlotAnimationAsDynamicMontage(
 					IdleAnimSequence,
-					FName("DefaultSlot"), // È·±£ÄãµÄ AnimBP ÀïÓĞ DefaultSlot ²å²Û
-					0.25f, // µ­ÈëÊ±¼ä
-					0.25f, // µ­³öÊ±¼ä
-					1.0f,  // ²¥·ÅËÙÂÊ
-					1      // Ñ­»·´ÎÊı (1´Î)
+					FName("DefaultSlot"), // ç¡®ä¿ä½ çš„ AnimBP é‡Œæœ‰ DefaultSlot æ’æ§½
+					0.25f, // æ·¡å…¥æ—¶é—´
+					0.25f, // æ·¡å‡ºæ—¶é—´
+					1.0f,  // æ’­æ”¾é€Ÿç‡
+					1      // å¾ªç¯æ¬¡æ•° (1æ¬¡)
 				);
 
 				UE_LOG(LogTemplateCharacter, Log, TEXT("Player AFK detected. Playing Idle Animation Sequence."));
@@ -179,23 +179,23 @@ void Ablackmyth_wukongCharacter::Tick(float DeltaTime)
 
 void Ablackmyth_wukongCharacter::ResetIdleTimer()
 {
-	// ¸üĞÂ×îºó²Ù×÷Ê±¼ä
+	// æ›´æ–°æœ€åæ“ä½œæ—¶é—´
 	if (GetWorld())
 	{
 		LastInputTime = GetWorld()->GetTimeSeconds();
 	}
 
-	// [ĞŞ¸Äµã] Í£Ö¹ÌØ¶¨µÄÁÙÊ±ÃÉÌ«Ææ
+	// [ä¿®æ”¹ç‚¹] åœæ­¢ç‰¹å®šçš„ä¸´æ—¶è’™å¤ªå¥‡
 	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
 	if (AnimInstance && CurrentIdleMontage)
 	{
-		// ¼ì²éÕâ¸öÁÙÊ±Éú³ÉµÄÃÉÌ«ÆæÊÇ·ñ»¹ÔÚ²¥·Å
+		// æ£€æŸ¥è¿™ä¸ªä¸´æ—¶ç”Ÿæˆçš„è’™å¤ªå¥‡æ˜¯å¦è¿˜åœ¨æ’­æ”¾
 		if (AnimInstance->Montage_IsPlaying(CurrentIdleMontage))
 		{
-			// 0.25ÃëÆ½»¬Í£Ö¹
+			// 0.25ç§’å¹³æ»‘åœæ­¢
 			AnimInstance->Montage_Stop(0.25f, CurrentIdleMontage);
 		}
-		// Çå¿ÕÒıÓÃ
+		// æ¸…ç©ºå¼•ç”¨
 		CurrentIdleMontage = nullptr;
 	}
 }
@@ -221,7 +221,7 @@ void Ablackmyth_wukongCharacter::SetupPlayerInputComponent(UInputComponent* Play
 		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &Ablackmyth_wukongCharacter::Move);
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &Ablackmyth_wukongCharacter::Look);
 
-		// [ĞÂÔö] ±¼ÅÜ°ó¶¨
+		// [æ–°å¢] å¥”è·‘ç»‘å®š
 		if (SprintAction)
 		{
 			EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Started, this, &Ablackmyth_wukongCharacter::Sprint);
@@ -229,7 +229,7 @@ void Ablackmyth_wukongCharacter::SetupPlayerInputComponent(UInputComponent* Play
 			EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Canceled, this, &Ablackmyth_wukongCharacter::StopSprinting);
 		}
 
-		// Õ½¶·°ó¶¨
+		// æˆ˜æ–—ç»‘å®š
 		if (LightAttackAction)
 		{
 			EnhancedInputComponent->BindAction(LightAttackAction, ETriggerEvent::Started, this, &Ablackmyth_wukongCharacter::PerformLightAttack);
@@ -252,9 +252,9 @@ void Ablackmyth_wukongCharacter::SetupPlayerInputComponent(UInputComponent* Play
 
 void Ablackmyth_wukongCharacter::Move(const FInputActionValue& Value)
 {
-	ResetIdleTimer(); // ÖØÖÃ Idle ¼ÆÊ±
+	ResetIdleTimer(); // é‡ç½® Idle è®¡æ—¶
 
-	// ËÀÍö»òÉÁ±ÜÖĞ²»¿ÉÒÆ¶¯
+	// æ­»äº¡æˆ–é—ªé¿ä¸­ä¸å¯ç§»åŠ¨
 	if (bIsDead || bIsDodging) return;
 
 	FVector2D MovementVector = Value.Get<FVector2D>();
@@ -274,7 +274,7 @@ void Ablackmyth_wukongCharacter::Move(const FInputActionValue& Value)
 
 void Ablackmyth_wukongCharacter::Look(const FInputActionValue& Value)
 {
-	ResetIdleTimer(); // ¶¯Êó±êÒ²Ëã²Ù×÷
+	ResetIdleTimer(); // åŠ¨é¼ æ ‡ä¹Ÿç®—æ“ä½œ
 
 	if (bIsDead) return;
 
@@ -288,20 +288,20 @@ void Ablackmyth_wukongCharacter::Look(const FInputActionValue& Value)
 }
 
 // -------------------------------------------------------------------------
-// [ĞÂÔö] ±¼ÅÜÏµÍ³
+// [æ–°å¢] å¥”è·‘ç³»ç»Ÿ
 // -------------------------------------------------------------------------
 
 void Ablackmyth_wukongCharacter::Sprint()
 {
-	ResetIdleTimer(); // ±¼ÅÜËã²Ù×÷
+	ResetIdleTimer(); // å¥”è·‘ç®—æ“ä½œ
 
-	// ËÀÍö¡¢ÉÁ±ÜÖĞ¡¢¹¥»÷ÖĞ¡¢»òÕßÕıÔÚ×¹ÂäÊ±²»ÔÊĞí¿ªÆô±¼ÅÜ
+	// æ­»äº¡ã€é—ªé¿ä¸­ã€æ”»å‡»ä¸­ã€æˆ–è€…æ­£åœ¨å è½æ—¶ä¸å…è®¸å¼€å¯å¥”è·‘
 	if (bIsDead || bIsDodging || bIsAttacking) return;
 
 	bIsSprinting = true;
 	GetCharacterMovement()->MaxWalkSpeed = SprintSpeed;
 
-	// --- [ºËĞÄĞŞ¸Ä] ´¿C++¿ØÖÆ¶¯»­ËÙÂÊ ---
+	// --- [æ ¸å¿ƒä¿®æ”¹] çº¯C++æ§åˆ¶åŠ¨ç”»é€Ÿç‡ ---
 	float SpeedRatio = SprintSpeed / (WalkSpeed > KINDA_SMALL_NUMBER ? WalkSpeed : 500.0f);
 
 	if (GetMesh())
@@ -315,7 +315,7 @@ void Ablackmyth_wukongCharacter::StopSprinting()
 	bIsSprinting = false;
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
 
-	// --- [ºËĞÄĞŞ¸Ä] »Ö¸´Õı³£¶¯»­ËÙÂÊ ---
+	// --- [æ ¸å¿ƒä¿®æ”¹] æ¢å¤æ­£å¸¸åŠ¨ç”»é€Ÿç‡ ---
 	if (GetMesh())
 	{
 		GetMesh()->GlobalAnimRateScale = 1.0f;
@@ -323,17 +323,17 @@ void Ablackmyth_wukongCharacter::StopSprinting()
 }
 
 // -------------------------------------------------------------------------
-// [Õ½¶·ÏµÍ³]
+// [æˆ˜æ–—ç³»ç»Ÿ]
 // -------------------------------------------------------------------------
 
 void Ablackmyth_wukongCharacter::PerformLightAttack(const FInputActionValue& Value)
 {
-	ResetIdleTimer(); // ¹¥»÷Ëã²Ù×÷
+	ResetIdleTimer(); // æ”»å‡»ç®—æ“ä½œ
 
 	if (bIsDead || bIsDodging) return;
 	if (LightAttackMontages.Num() == 0) return;
 
-	// ¹¥»÷Ê±Ç¿ÖÆÍ£Ö¹±¼ÅÜ
+	// æ”»å‡»æ—¶å¼ºåˆ¶åœæ­¢å¥”è·‘
 	StopSprinting();
 
 	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
@@ -358,11 +358,11 @@ void Ablackmyth_wukongCharacter::PerformLightAttack(const FInputActionValue& Val
 
 void Ablackmyth_wukongCharacter::PerformHeavyAttack(const FInputActionValue& Value)
 {
-	ResetIdleTimer(); // ¹¥»÷Ëã²Ù×÷
+	ResetIdleTimer(); // æ”»å‡»ç®—æ“ä½œ
 
 	if (bIsDead || bIsDodging || !HeavyAttackMontage) return;
 
-	// ¹¥»÷Ê±Ç¿ÖÆÍ£Ö¹±¼ÅÜ
+	// æ”»å‡»æ—¶å¼ºåˆ¶åœæ­¢å¥”è·‘
 	StopSprinting();
 
 	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
@@ -384,17 +384,17 @@ void Ablackmyth_wukongCharacter::ResetCombo()
 
 void Ablackmyth_wukongCharacter::PerformDodge(const FInputActionValue& Value)
 {
-	ResetIdleTimer(); // ÉÁ±ÜËã²Ù×÷
+	ResetIdleTimer(); // é—ªé¿ç®—æ“ä½œ
 
 	if (bIsDead || bIsDodging || bDodgeOnCooldown || !DodgeAnimSequence) return;
 
-	// ÉÁ±ÜÊ±Í£Ö¹±¼ÅÜ×´Ì¬
+	// é—ªé¿æ—¶åœæ­¢å¥”è·‘çŠ¶æ€
 	StopSprinting();
 
 	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
 	if (!AnimInstance) return;
 
-	// --- 1. ¼ÆËãÉÁ±Ü·½Ïò ---
+	// --- 1. è®¡ç®—é—ªé¿æ–¹å‘ ---
 	FVector InputDir = GetLastMovementInputVector();
 	FVector FinalDodgeDir;
 
@@ -407,7 +407,7 @@ void Ablackmyth_wukongCharacter::PerformDodge(const FInputActionValue& Value)
 		FinalDodgeDir = InputDir.GetSafeNormal();
 	}
 
-	// --- 2. ÎïÀí×´Ì¬ÖØÖÃ ---
+	// --- 2. ç‰©ç†çŠ¶æ€é‡ç½® ---
 	bool bIsFalling = GetCharacterMovement()->IsFalling();
 
 	if (bIsFalling)
@@ -424,7 +424,7 @@ void Ablackmyth_wukongCharacter::PerformDodge(const FInputActionValue& Value)
 		GetCharacterMovement()->BrakingDecelerationWalking = 0.0f;
 	}
 
-	// --- 3. ²¥·Å¶¯»­ ---
+	// --- 3. æ’­æ”¾åŠ¨ç”» ---
 	ResetCombo();
 	AnimInstance->StopAllMontages(0.1f);
 	AnimInstance->PlaySlotAnimationAsDynamicMontage(
@@ -432,7 +432,7 @@ void Ablackmyth_wukongCharacter::PerformDodge(const FInputActionValue& Value)
 		FName("DefaultSlot"),
 		0.1f, 0.2f, DodgePlayRate, 1);
 
-	// --- 4. ÉèÖÃ×´Ì¬Óë¼ÆÊ±Æ÷ ---
+	// --- 4. è®¾ç½®çŠ¶æ€ä¸è®¡æ—¶å™¨ ---
 	bIsDodging = true;
 	bDodgeOnCooldown = true;
 
@@ -441,7 +441,7 @@ void Ablackmyth_wukongCharacter::PerformDodge(const FInputActionValue& Value)
 	GetWorldTimerManager().SetTimer(DodgeResetTimer, this, &Ablackmyth_wukongCharacter::ResetDodgeState, AnimDuration, false);
 	GetWorldTimerManager().SetTimer(DodgeCooldownTimer, this, &Ablackmyth_wukongCharacter::ResetDodgeCooldown, DodgeCooldownTime, false);
 
-	// --- 5. Ê©¼Ó±¬·¢Á¦ ---
+	// --- 5. æ–½åŠ çˆ†å‘åŠ› ---
 	LaunchCharacter(FinalDodgeDir * DodgeStrength, true, true);
 }
 
@@ -451,7 +451,7 @@ void Ablackmyth_wukongCharacter::ResetDodgeState()
 
 	bIsDodging = false;
 
-	// [ºËĞÄĞŞ¸´] »Ö¸´Õı³£µÄÎïÀí²ÎÊı
+	// [æ ¸å¿ƒä¿®å¤] æ¢å¤æ­£å¸¸çš„ç‰©ç†å‚æ•°
 	GetCharacterMovement()->GroundFriction = 8.0f;
 	GetCharacterMovement()->BrakingDecelerationWalking = 2000.0f;
 }
@@ -465,7 +465,7 @@ float Ablackmyth_wukongCharacter::TakeDamage(float DamageAmount, struct FDamageE
 {
 	if (bIsDead) return 0.0f;
 
-	// ÊÜ»÷Ò²Ëã²Ù×÷£¨·ÀÖ¹°¤´òÊ±²¥·ÅË£¹÷×Ó¶¯»­£©
+	// å—å‡»ä¹Ÿç®—æ“ä½œï¼ˆé˜²æ­¢æŒ¨æ‰“æ—¶æ’­æ”¾è€æ£å­åŠ¨ç”»ï¼‰
 	ResetIdleTimer();
 
 	float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
@@ -486,7 +486,7 @@ void Ablackmyth_wukongCharacter::Die()
 	if (bIsDead) return;
 	bIsDead = true;
 
-	// ËÀÍöÍ£Ö¹Ò»ÇĞ¶¯×÷
+	// æ­»äº¡åœæ­¢ä¸€åˆ‡åŠ¨ä½œ
 	StopSprinting();
 
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
@@ -562,7 +562,7 @@ void Ablackmyth_wukongCharacter::Die()
 }
 
 // -------------------------------------------------------------------------
-// [RPG Éı¼¶ÏµÍ³ ÊµÏÖ]
+// [RPG å‡çº§ç³»ç»Ÿ å®ç°]
 // -------------------------------------------------------------------------
 
 void Ablackmyth_wukongCharacter::GainExperience(float Amount)
@@ -572,38 +572,38 @@ void Ablackmyth_wukongCharacter::GainExperience(float Amount)
 	CurrentXP += Amount;
 	UE_LOG(LogTemplateCharacter, Log, TEXT("Gained XP: %f. Total: %f / %f"), Amount, CurrentXP, MaxXP);
 
-	// Ñ­»·¼ì²éÊÇ·ñÂú×ãÉı¼¶Ìõ¼ş
+	// å¾ªç¯æ£€æŸ¥æ˜¯å¦æ»¡è¶³å‡çº§æ¡ä»¶
 	CheckLevelUp();
 }
 
 void Ablackmyth_wukongCharacter::CheckLevelUp()
 {
-	// Ê¹ÓÃ while Ñ­»·£¬·ÀÖ¹¾­ÑéÖµ¹ı¶àĞèÒªÁ¬Éı¼¸¼¶µÄÇé¿ö
+	// ä½¿ç”¨ while å¾ªç¯ï¼Œé˜²æ­¢ç»éªŒå€¼è¿‡å¤šéœ€è¦è¿å‡å‡ çº§çš„æƒ…å†µ
 	while (CurrentXP >= MaxXP)
 	{
 		CurrentXP -= MaxXP;
 		CharacterLevel++;
 
-		// --- [×Ô¶¯³É³¤Âß¼­] ---
-		// Ã¿´ÎÉı¼¶×Ô¶¯Ôö¼ÓÊôĞÔ£¬²»ÔÙĞèÒªÊÖ¶¯·ÖÅäµãÊı
-		MaxHealth += 20.0f;       // ÉúÃüÉÏÏŞ +20
-		BaseAttackPower += 5.0f;  // ¹¥»÷Á¦ +5
+		// --- [è‡ªåŠ¨æˆé•¿é€»è¾‘] ---
+		// æ¯æ¬¡å‡çº§è‡ªåŠ¨å¢åŠ å±æ€§ï¼Œä¸å†éœ€è¦æ‰‹åŠ¨åˆ†é…ç‚¹æ•°
+		MaxHealth += 20.0f;       // ç”Ÿå‘½ä¸Šé™ +20
+		BaseAttackPower += 5.0f;  // æ”»å‡»åŠ› +5
 
-		// Éı¼¶ÇúÏß£ºÃ¿¼¶ËùĞè¾­ÑéÔö¼Ó 50%
+		// å‡çº§æ›²çº¿ï¼šæ¯çº§æ‰€éœ€ç»éªŒå¢åŠ  50%
 		MaxXP = MaxXP * 1.5f;
 
-		// Éı¼¶Ê±»ØÂúÑª (»Ö¸´µ½ĞÂµÄ MaxHealth)
+		// å‡çº§æ—¶å›æ»¡è¡€ (æ¢å¤åˆ°æ–°çš„ MaxHealth)
 		CurrentHealth = MaxHealth;
 
 		UE_LOG(LogTemplateCharacter, Log, TEXT("Level Up! New Level: %d. Stats Increased."), CharacterLevel);
 
-		// µ÷ÓÃÀ¶Í¼ÊÂ¼ş (²¥·ÅÌØĞ§/UIÌáÊ¾)
+		// è°ƒç”¨è“å›¾äº‹ä»¶ (æ’­æ”¾ç‰¹æ•ˆ/UIæç¤º)
 		OnLevelUp();
 	}
 }
 
 float Ablackmyth_wukongCharacter::GetTotalAttackPower() const
 {
-	// ·µ»Øµ±Ç°³É³¤µÄ¹¥»÷Á¦
+	// è¿”å›å½“å‰æˆé•¿çš„æ”»å‡»åŠ›
 	return BaseAttackPower;
 }
