@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -14,7 +14,7 @@ class UInputMappingContext;
 class UInputAction;
 class UAnimMontage;
 class UAnimSequence;
-class UUserWidget;
+class UUserWidget; // [新增] 必须声明，否则识别不了 UI 类
 struct FInputActionValue;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
@@ -48,15 +48,11 @@ class Ablackmyth_wukongCharacter : public ACharacter
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* LookAction;
 
-	// --- [新增] 奔跑输入 ---
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* SprintAction;
 
-	// --- [����] ���⼼������ ---
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* SpecialSkillAction;
-
-	// --- ս�����붯�� ---
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* LightAttackAction;
@@ -67,29 +63,28 @@ class Ablackmyth_wukongCharacter : public ACharacter
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* DodgeAction;
 
-	// --- 动画资源 ---
+	// =================================================================
+	// [新增] 暂停系统输入
+	// =================================================================
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	UInputAction* PauseAction;
 
-	/** 轻攻击连招蒙太奇数组 */
+	// --- 动画资源 ---
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Animation, meta = (AllowPrivateAccess = "true"))
 	TArray<UAnimMontage*> LightAttackMontages;
 
-	/** 重攻击蒙太奇 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Animation, meta = (AllowPrivateAccess = "true"))
 	UAnimMontage* HeavyAttackMontage;
 
-	/** ���⼼�ܶ������� */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Animation, meta = (AllowPrivateAccess = "true"))
 	UAnimSequence* SpecialSkillAnimSequence;
 
-	/** [����] �ܻ��������� */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Animation, meta = (AllowPrivateAccess = "true"))
 	UAnimSequence* HitReactAnimSequence;
 
-	/** ���ܶ������� */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Animation, meta = (AllowPrivateAccess = "true"))
 	UAnimSequence* DodgeAnimSequence;
 
-	/** 死亡动画序列 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Animation, meta = (AllowPrivateAccess = "true"))
 	UAnimSequence* DeathAnimSequence;
 
@@ -99,73 +94,64 @@ public:
 	virtual void Tick(float DeltaTime) override;
 
 	// --- 战斗参数配置 ---
-
-	/** ���Ѫ�� */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
 	float MaxHealth;
 
-	/** 当前血量 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Health")
 	float CurrentHealth;
 
-	/** 闪避冷却时间 (秒) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
 	float DodgeCooldownTime;
 
-	/** 闪避播放速率 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
 	float DodgePlayRate;
 
-	/** 闪避冲刺力度 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
 	float DodgeStrength;
 
-	// --- �����ж����� ---
-
-	/** ��ͨ�����ж����� (��) */
+	// --- 攻击判定参数 ---
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|HitDetection")
 	float AttackRange;
 
-	/** ���⼼�ܹ����ж����� (��) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|HitDetection")
 	float SkillAttackRange;
 
-	/** �����ж�����뾶 (�ж�����) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|HitDetection")
 	float AttackRadius;
 
-	/** �Ƿ���ʾ������ (Debug Sphere) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|HitDetection")
 	bool bShowHitDebug;
 
-	// --- ���ܲ������� ---
-
-	/** ������ȴʱ�� (��) */
+	// --- 技能参数 ---
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Skill")
 	float SkillCooldownTime;
 
-	/** �����Ƿ�����ȴ�� */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat|Skill")
 	bool bIsSkillOnCooldown;
 
-	/** ����ʱ��ʾ�� UI �� */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
 	TSubclassOf<class UUserWidget> GameOverWidgetClass;
 
-	// --- �ƶ����� ---
+	// =================================================================
+	// [新增] 暂停菜单 UI 类引用
+	// =================================================================
 
-	/** 正常行走速度 */
+	/** 暂停菜单的蓝图类 (WBP_PauseMenu) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
+	TSubclassOf<class UUserWidget> PauseMenuWidgetClass;
+
+	/** 保存当前的菜单实例 */
+	UPROPERTY()
+	UUserWidget* PauseMenuInstance;
+
+	// --- 移动参数 ---
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
 	float WalkSpeed;
 
-	/** 奔跑速度 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
 	float SprintSpeed;
 
-	// =================================================================
-	// [RPG 升级系统 变量]
-	// =================================================================
-
+	// --- RPG 系统 ---
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "RPG System")
 	int32 CharacterLevel;
 
@@ -178,10 +164,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
 	float BaseAttackPower;
 
-	// =================================================================
-	// [RPG 升级系统 函数]
-	// =================================================================
-
+	// --- 函数 ---
 	UFUNCTION(BlueprintCallable, Category = "RPG System")
 	void GainExperience(float Amount);
 
@@ -191,7 +174,6 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Combat|Skill")
 	float GetSkillCooldownFraction() const;
 
-	/** ��ͼ�ɵ��õĹ�����⺯�� */
 	UFUNCTION(BlueprintCallable, Category = "Combat|HitDetection")
 	void CheckAttackHit(float CurrentRange);
 
@@ -204,35 +186,27 @@ protected:
 
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
-
 	void Sprint();
 	void StopSprinting();
 
-	// --- 战斗处理 ---
 	void PerformLightAttack(const FInputActionValue& Value);
 	void PerformHeavyAttack(const FInputActionValue& Value);
 	void PerformDodge(const FInputActionValue& Value);
-
 	void PerformSpecialSkill(const FInputActionValue& Value);
 	void ResetSkillCooldown();
-
 	void ResetCombo();
-
 	void ResetDodgeState();
 	void ResetDodgeCooldown();
-
-	// --- [����] �ܻ�״̬�ָ� ---
 	void ResetHitReactState();
-
-	// --- [RPG ��������] ---
 	void CheckLevelUp();
+
+	// =================================================================
+	// [新增] 暂停功能函数
+	// =================================================================
+	void TogglePause(const FInputActionValue& Value);
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "RPG System")
 	void OnLevelUp();
-
-	// =================================================================
-	// [Idle 闲置系统]
-	// =================================================================
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation|Idle")
 	float IdleWaitTime;
@@ -242,6 +216,9 @@ protected:
 
 	void ResetIdleTimer();
 
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void ResumeGameFromUI();
+
 public:
 	FORCEINLINE class USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
 	FORCEINLINE class UCameraComponent* GetFollowCamera() const { return FollowCamera; }
@@ -250,27 +227,15 @@ private:
 	int32 ComboIndex;
 	bool bIsAttacking;
 	FTimerHandle ComboResetTimer;
-
-	// --- 闪避状态管理 ---
 	bool bIsDodging;
 	bool bDodgeOnCooldown;
 	FTimerHandle DodgeResetTimer;
 	FTimerHandle DodgeCooldownTimer;
-
-	// --- ���ܼ�ʱ�� ---
 	FTimerHandle SkillCooldownTimer;
-
-	// --- ����״̬���� ---
 	bool bIsDead;
-
-	// --- 奔跑状态 ---
 	bool bIsSprinting;
-
-	// --- [����] �ܻ�״̬ ---
 	bool bIsHitReacting;
 	FTimerHandle HitReactResetTimer;
-
-	// --- Idle ״̬���� ---
 	double LastInputTime;
 
 	UPROPERTY()
