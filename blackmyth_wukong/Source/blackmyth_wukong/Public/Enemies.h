@@ -6,6 +6,9 @@
 #include "GameFramework/Character.h"
 #include "Enemies.generated.h"
 
+
+class UBoxComponent;
+
 UCLASS()
 class BLACKMYTH_WUKONG_API AEnemies : public ACharacter
 {
@@ -15,8 +18,6 @@ public:
     // 构造函数
     AEnemies();
 
-    // --- 在这里添加核心函数 ---
-
     // 重写系统的受击函数，处理扣血逻辑
     virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
 
@@ -24,7 +25,6 @@ protected:
     // 开始游戏时调用
     virtual void BeginPlay() override;
 
-    // --- 在这里添加核心属性 ---
 
     // 当前血量：允许在编辑器修改，并在蓝图中读写
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat | Stats")
@@ -37,6 +37,59 @@ protected:
     // 敌人名称（用于显示在血条上）
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat | Stats")
     FText EnemyName;
+
+protected:
+    // 1. 武器碰撞盒组件
+    // 右手武器碰撞盒
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
+    UBoxComponent* WeaponCollisionR;
+
+    // 左手武器碰撞盒
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
+    UBoxComponent* WeaponCollisionL;
+
+    // 2. 基础攻击力
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
+    float BaseDamage = 20.f;
+
+    // 3. 记录单次挥刀已击中的敌人（防止一刀多判）
+    UPROPERTY()
+    TArray<AActor*> HitActors;
+
+public:
+    // 4. 开启武器碰撞（给动画通知调用）
+    // bEnableLeft: 是否开启左手, bEnableRight: 是否开启右手
+    UFUNCTION(BlueprintCallable, Category = "Combat")
+    void EnableWeaponCollision(bool bEnableLeft, bool bEnableRight);
+
+    // 5. 关闭武器碰撞（给动画通知调用）
+    UFUNCTION(BlueprintCallable, Category = "Combat")
+    void DisableWeaponCollision();
+
+    // 6. 重叠判定函数（必须加 UFUNCTION 宏）
+    UFUNCTION()
+    void OnWeaponOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult & SweepResult);
+
+protected:
+    // 受击蒙太奇 (在蓝图中赋值)
+    UPROPERTY(EditDefaultsOnly, Category = "Combat")
+    UAnimMontage* HitMontage;
+
+    // 死亡蒙太奇 (在蓝图中赋值)
+    UPROPERTY(EditDefaultsOnly, Category = "Combat")
+    UAnimMontage* DeathMontage;
+
+    // 是否已死亡 (防止鞭尸)
+    bool bIsDead = false;
+
+    // 处理死亡的函数
+    void HandleDeath();
+
+public:
+    // 获取是否死亡 (给 AI 控制器用)
+    UFUNCTION(BlueprintCallable, Category = "Combat")
+    bool IsDead() const { return bIsDead; }
+
 
 public:
     // 每一帧调用
