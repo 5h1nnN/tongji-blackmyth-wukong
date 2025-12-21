@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "Logging/LogMacros.h"
+#include "BaseCharacter.h"
 #include "blackmyth_wukongCharacter.generated.h"
 
 // 前向声明
@@ -20,7 +21,7 @@ struct FInputActionValue;
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
 UCLASS(config = Game)
-class Ablackmyth_wukongCharacter : public ACharacter
+class Ablackmyth_wukongCharacter : public ABaseCharacter
 {
 	GENERATED_BODY()
 
