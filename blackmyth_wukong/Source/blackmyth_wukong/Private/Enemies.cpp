@@ -6,6 +6,7 @@
 #include "Kismet/GameplayStatics.h"  // 引入玩法统计库（用于造成伤害）
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "EnemyAIController.h"
 
 
 // Sets default values
@@ -78,19 +79,26 @@ float AEnemies::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, 
         {
             PlayAnimMontage(HitMontage);
         }
+
+        // 4. 获取 C++ AI 控制器并调用硬直
+        if (AEnemyAIController* MyAIC = Cast<AEnemyAIController>(GetController()))
+        {
+            // 这里的 StunDuration 是你在 Enemies.h 里定义的变量
+            MyAIC->HandleHitStun(StunDuration);
+        }
     }
 
 
     if (Health <= 0.f)
     {
         // 打印调试
-        if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("00death"));
+        if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("death"));
         HandleDeath();
     }
     else
     {
         // 打印调试
-        if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, TEXT("11hit"));
+        if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, TEXT("hit"));
 
         if (HitMontage)
         {
