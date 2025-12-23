@@ -3,6 +3,9 @@
 #include "Camera/CameraComponent.h"
 #include "GameFramework/Controller.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "EnhancedInputComponent.h"
+#include "EnhancedInputSubsystems.h"
+#include "InputActionValue.h"
 
 AFeyCharacter::AFeyCharacter()
 {
@@ -42,87 +45,99 @@ void AFeyCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// 游戏开始时重置血量
-	CurrentHealth = MaxHealth;
+	// 关键：当角色生成时，如果是玩家控制，添加输入映射上下文
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
+		{
+			// 即使变身，也要确保这个角色的映射表被激活
+			Subsystem->AddMappingContext(FeyMappingContext, 0);
+		}
+	}
+	if (AutoTransformDuration > 0.0f)
+	{
+		// 参数说明：句柄，对象，函数地址，延迟时间，是否循环
+		GetWorldTimerManager().SetTimer(
+			TransformTimerHandle,
+			this,
+			&AFeyCharacter::OnAutoTransformTimerTimeout,
+			AutoTransformDuration,
+			false
+		);
+	}
 }
 
-void AFeyCharacter::Tick(float DeltaTime)
+void AFeyCharacter::OnAutoTransformTimerTimeout()
 {
-	Super::Tick(DeltaTime);
+	// 时间到了，执行变身
+	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Cyan, TEXT("Time Up! Auto Reverting..."));
+
+	TransformCharacter();
 }
 
-// 绑定输入 (注意：这里使用的是传统的轴映射，如果是UE5.1+ 建议使用 Enhanced Input)
 void AFeyCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
-	Super::SetupPlayerInputComponent(PlayerInputComponent);
+	// 注意：不调用 Super，或者确保 Super 里没有冲突逻辑
+	// 我们在这里完全重写增强输入绑定
 
-	// 绑定移动轴 (需在项目设置 -> 输入 中配置名称为 "MoveForward" 和 "MoveRight")
-	PlayerInputComponent->BindAxis("MoveForward", this, &AFeyCharacter::MoveForward);
-	PlayerInputComponent->BindAxis("MoveRight", this, &AFeyCharacter::MoveRight);
+	if (UEnhancedInputComponent* EIC = CastChecked<UEnhancedInputComponent>(PlayerInputComponent))
+	{
+		// 1. 绑定移动 (Vector2D)
+		if (MoveAction)
+		{
+			EIC->BindAction(MoveAction, ETriggerEvent::Triggered, this, &AFeyCharacter::Move);
+		}
 
-	// 绑定鼠标视角轴 (UE默认轴名称)
-	PlayerInputComponent->BindAxis("Turn", this, &APawn::AddControllerYawInput);
-	PlayerInputComponent->BindAxis("LookUp", this, &APawn::AddControllerPitchInput);
+		// 2. 绑定视角 (Vector2D)
+		if (LookAction)
+		{
+			EIC->BindAction(LookAction, ETriggerEvent::Triggered, this, &AFeyCharacter::Look);
+		}
 
-	// 绑定跳跃 (使用 ACharacter 自带的函数)
-	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ACharacter::Jump);
-	PlayerInputComponent->BindAction("Jump", IE_Released, this, &ACharacter::StopJumping);
+		// 3. 绑定跳跃
+		if (JumpAction)
+		{
+			EIC->BindAction(JumpAction, ETriggerEvent::Started, this, &ACharacter::Jump);
+			EIC->BindAction(JumpAction, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
+		}
+
+		// 4. 绑定变身 (调用父类 BaseCharacter 的 TransformCharacter)
+		if (TransformAction)
+		{
+			EIC->BindAction(TransformAction, ETriggerEvent::Started, this, &ABaseCharacter::TransformCharacter);
+		}
+	}
 }
 
-void AFeyCharacter::MoveForward(float Value)
+void AFeyCharacter::Move(const FInputActionValue& Value)
 {
-	if ((Controller != nullptr) && (Value != 0.0f))
+	FVector2D MovementVector = Value.Get<FVector2D>();
+
+	if (Controller != nullptr)
 	{
-		// 找出前方在哪里
+		// 获取控制旋转的偏航角 (Yaw)
 		const FRotator Rotation = Controller->GetControlRotation();
 		const FRotator YawRotation(0, Rotation.Yaw, 0);
 
 		// 获取前方向量
-		const FVector Direction = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
-		AddMovementInput(Direction, Value);
-	}
-}
-
-void AFeyCharacter::MoveRight(float Value)
-{
-	if ((Controller != nullptr) && (Value != 0.0f))
-	{
-		// 找出右方在哪里
-		const FRotator Rotation = Controller->GetControlRotation();
-		const FRotator YawRotation(0, Rotation.Yaw, 0);
-
+		const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
 		// 获取右方向量
-		const FVector Direction = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
-		AddMovementInput(Direction, Value);
+		const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+
+		// 添加移动
+		AddMovementInput(ForwardDirection, MovementVector.Y);
+		AddMovementInput(RightDirection, MovementVector.X);
 	}
 }
 
-float AFeyCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
+void AFeyCharacter::Look(const FInputActionValue& Value)
 {
-	// 调用父类逻辑（如果有的话）
-	float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+	FVector2D LookAxisVector = Value.Get<FVector2D>();
 
-	// 简单的减血逻辑
-	ActualDamage = FMath::Min(CurrentHealth, ActualDamage);
-	CurrentHealth -= ActualDamage;
-
-	// 打印调试信息 (屏幕左上角)
-	if (GEngine)
+	if (Controller != nullptr)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, FString::Printf(TEXT("HP: %f / %f"), CurrentHealth, MaxHealth));
+		// 添加控制器水平/垂直输入
+		AddControllerYawInput(LookAxisVector.X);
+		AddControllerPitchInput(LookAxisVector.Y);
 	}
-
-	// 如果血量归零，处理死亡逻辑
-	if (CurrentHealth <= 0.0f)
-	{
-		// TODO: 播放死亡动画或销毁角色
-		// Destroy(); 
-	}
-
-	return ActualDamage;
-}
-
-float AFeyCharacter::GetHealthPercent() const
-{
-	return CurrentHealth / MaxHealth;
 }
