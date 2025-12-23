@@ -4,6 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "Components/WidgetComponent.h"
+#include "EnemyHealthBar.h"
 #include "Enemies.generated.h"
 
 
@@ -103,6 +105,13 @@ protected:
     // 恢复行动的函数
     void RecoverFromStun();
 
+protected:
+    // UI 组件
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "UI")
+    UWidgetComponent* HealthBarWidgetComp;
+
+    // 更新血条的辅助函数
+    void UpdateHealthUI();
 
 public:
     // 每一帧调用

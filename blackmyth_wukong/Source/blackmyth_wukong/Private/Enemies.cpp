@@ -34,6 +34,14 @@ AEnemies::AEnemies()
     WeaponCollisionL->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     WeaponCollisionL->SetCollisionResponseToAllChannels(ECR_Ignore);
     WeaponCollisionL->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
+
+    // 初始化血条组件
+    HealthBarWidgetComp = CreateDefaultSubobject<UWidgetComponent>(TEXT("HealthBarComp"));
+    HealthBarWidgetComp->SetupAttachment(GetRootComponent()); // 挂在根部，稍后在蓝图调整位置
+
+    // 设置默认属性
+    HealthBarWidgetComp->SetWidgetSpace(EWidgetSpace::Screen); // Screen模式会让血条永远面向摄像机
+    HealthBarWidgetComp->SetDrawSize(FVector2D(100.f, 10.f)); // 默认大小
 }
 
 // Called when the game starts or when spawned	
@@ -41,8 +49,9 @@ void AEnemies::BeginPlay()
 {
     Super::BeginPlay();
 
-    // 确保开始游戏时是满血
+    // 确保刚出生时是满血
     Health = MaxHealth;
+    UpdateHealthUI(); 
 
     // 绑定事件
     if (WeaponCollisionR)
@@ -64,15 +73,19 @@ float AEnemies::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, 
     // 1. 扣血
     float DamageApplied = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
     Health = FMath::Clamp(Health - DamageApplied, 0.f, MaxHealth);
-
-    UE_LOG(LogTemp, Warning, TEXT("敌人剩余血量: %f"), Health);
+    // 更新 UI
+    UpdateHealthUI();
+    // UE_LOG(LogTemp, Warning, TEXT("敌人剩余血量: %f"), Health);
 
     // 2. 判断死亡
     if (Health <= 0.f)
     {
+        // 死了就把血条隐藏
+        if (HealthBarWidgetComp) HealthBarWidgetComp->SetVisibility(false);
         HandleDeath();
         // 如果死了，清除硬直定时器
         GetWorldTimerManager().ClearTimer(StunTimerHandle); 
+
     }
     else
     {
@@ -241,6 +254,21 @@ void AEnemies::RecoverFromStun()
         // if(GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, TEXT("硬直结束，AI 恢复行动"));
     }
 }
+
+void AEnemies::UpdateHealthUI()
+{
+    if (HealthBarWidgetComp)
+    {
+        // 获取真正的 Widget 实例，并转换为我们的 C++ 类型
+        UEnemyHealthBar* HealthBar = Cast<UEnemyHealthBar>(HealthBarWidgetComp->GetUserWidgetObject());
+        if (HealthBar)
+        {
+            float Percent = Health / MaxHealth;
+            HealthBar->UpdateHealthPercent(Percent);
+        }
+    }
+}
+
 
 // Called every frame
 void AEnemies::Tick(float DeltaTime)
