@@ -7,7 +7,7 @@
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "EnemyAIController.h"
-
+#include "BrainComponent.h"
 
 // Sets default values
 AEnemies::AEnemies()
@@ -71,6 +71,8 @@ float AEnemies::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, 
     if (Health <= 0.f)
     {
         HandleDeath();
+        // 如果死了，清除硬直定时器
+        GetWorldTimerManager().ClearTimer(StunTimerHandle); 
     }
     else
     {
@@ -78,14 +80,33 @@ float AEnemies::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, 
         if (HitMontage)
         {
             PlayAnimMontage(HitMontage);
+
+        }
+        
+        // A. 获取 AI 控制器
+        AAIController* AIC = Cast<AAIController>(GetController());
+        if (AIC)
+        {
+            // B. 物理打断：立刻停止移动
+            AIC->StopMovement();
+            
+            // C. 精神打断：暂停行为树逻辑 (防止它这时候决定攻击你)
+            if (AIC->GetBrainComponent())
+            {
+                AIC->GetBrainComponent()->StopLogic("HitReaction");
+            }
         }
 
-        // 4. 获取 C++ AI 控制器并调用硬直
-        if (AEnemyAIController* MyAIC = Cast<AEnemyAIController>(GetController()))
-        {
-            // 这里的 StunDuration 是你在 Enemies.h 里定义的变量
-            MyAIC->HandleHitStun(StunDuration);
-        }
+        
+        // E. 设置定时器：在 StunDuration 秒后，执行 RecoverFromStun 函数
+        // 如果再次受击，SetTimer 会自动重置时间（重置硬直）
+        GetWorldTimerManager().SetTimer(
+            StunTimerHandle, 
+            this, 
+            &AEnemies::RecoverFromStun, 
+            StunDuration, 
+            false
+        );
     }
 
 
@@ -132,7 +153,7 @@ void AEnemies::HandleDeath()
     }
 
     // 若干秒后销毁尸体
-    SetLifeSpan(5.0f);
+    SetLifeSpan(3.0f);
 }
 
 
@@ -195,12 +216,29 @@ void AEnemies::OnWeaponOverlap(UPrimitiveComponent* OverlappedComponent, AActor*
             UDamageType::StaticClass() // 伤害类型
         );
 
-        // 6. 打印调试信息
-        if (GEngine)
-        {
-            FString Msg = FString::Printf(TEXT("砍中了: %s, 造成伤害: %f"), *OtherActor->GetName(), BaseDamage);
-            GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, Msg);
-        }
+        // // 6. 打印调试信息
+        // if (GEngine)
+        // {
+        //     FString Msg = FString::Printf(TEXT("target: %s, damage: %f"), *OtherActor->GetName(), BaseDamage);
+        //     GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, Msg);
+        // }
+    }
+}
+
+
+void AEnemies::RecoverFromStun()
+{
+    if (bIsDead) return; // 如果硬直期间死了，就不恢复了
+
+    // 获取 AI 控制器
+    AAIController* AIC = Cast<AAIController>(GetController());
+    if (AIC && AIC->GetBrainComponent())
+    {
+        // 重启行为树逻辑
+        AIC->GetBrainComponent()->RestartLogic();
+        
+        // 打印调试
+        // if(GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, TEXT("硬直结束，AI 恢复行动"));
     }
 }
 
