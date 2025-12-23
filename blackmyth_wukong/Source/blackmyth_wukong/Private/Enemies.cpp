@@ -6,7 +6,8 @@
 #include "Kismet/GameplayStatics.h"  // 引入玩法统计库（用于造成伤害）
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
-
+#include "EnemyAIController.h"
+#include "BrainComponent.h"
 
 // Sets default values
 AEnemies::AEnemies()
@@ -21,7 +22,7 @@ AEnemies::AEnemies()
 	// --- 1. 初始化右手 (原有的) ---
     WeaponCollisionR = CreateDefaultSubobject<UBoxComponent>(TEXT("WeaponCollisionR"));
     WeaponCollisionR->SetupAttachment(GetMesh(), FName("FX_Trail_R_02")); // 绑定右手
-    WeaponCollisionR->SetBoxExtent(FVector(20.f, 20.f, 20.f));
+    WeaponCollisionR->SetBoxExtent(FVector(30.f, 30.f, 30.f));
     WeaponCollisionR->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     WeaponCollisionR->SetCollisionResponseToAllChannels(ECR_Ignore);
     WeaponCollisionR->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
@@ -29,10 +30,18 @@ AEnemies::AEnemies()
     // --- 2. 初始化左手 (新增的) ---
     WeaponCollisionL = CreateDefaultSubobject<UBoxComponent>(TEXT("WeaponCollisionL"));
     WeaponCollisionL->SetupAttachment(GetMesh(), FName("FX_Trail_L_02")); // 绑定左手
-    WeaponCollisionL->SetBoxExtent(FVector(20.f, 20.f, 20.f));
+    WeaponCollisionL->SetBoxExtent(FVector(30.f, 30.f, 30.f));
     WeaponCollisionL->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     WeaponCollisionL->SetCollisionResponseToAllChannels(ECR_Ignore);
     WeaponCollisionL->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
+
+    // 初始化血条组件
+    HealthBarWidgetComp = CreateDefaultSubobject<UWidgetComponent>(TEXT("HealthBarComp"));
+    HealthBarWidgetComp->SetupAttachment(GetRootComponent()); // 挂在根部，稍后在蓝图调整位置
+
+    // 设置默认属性
+    HealthBarWidgetComp->SetWidgetSpace(EWidgetSpace::Screen); // Screen模式会让血条永远面向摄像机
+    HealthBarWidgetComp->SetDrawSize(FVector2D(100.f, 10.f)); // 默认大小
 }
 
 // Called when the game starts or when spawned	
@@ -40,8 +49,9 @@ void AEnemies::BeginPlay()
 {
     Super::BeginPlay();
 
-    // 确保开始游戏时是满血
+    // 确保刚出生时是满血
     Health = MaxHealth;
+    UpdateHealthUI(); 
 
     // 绑定事件
     if (WeaponCollisionR)
@@ -63,13 +73,19 @@ float AEnemies::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, 
     // 1. 扣血
     float DamageApplied = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
     Health = FMath::Clamp(Health - DamageApplied, 0.f, MaxHealth);
-
-    UE_LOG(LogTemp, Warning, TEXT("敌人剩余血量: %f"), Health);
+    // 更新 UI
+    UpdateHealthUI();
+    // UE_LOG(LogTemp, Warning, TEXT("敌人剩余血量: %f"), Health);
 
     // 2. 判断死亡
     if (Health <= 0.f)
     {
+        // 死了就把血条隐藏
+        if (HealthBarWidgetComp) HealthBarWidgetComp->SetVisibility(false);
         HandleDeath();
+        // 如果死了，清除硬直定时器
+        GetWorldTimerManager().ClearTimer(StunTimerHandle); 
+
     }
     else
     {
@@ -77,6 +93,55 @@ float AEnemies::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, 
         if (HitMontage)
         {
             PlayAnimMontage(HitMontage);
+
+        }
+        
+        // A. 获取 AI 控制器
+        AAIController* AIC = Cast<AAIController>(GetController());
+        if (AIC)
+        {
+            // B. 物理打断：立刻停止移动
+            AIC->StopMovement();
+            
+            // C. 精神打断：暂停行为树逻辑 (防止它这时候决定攻击你)
+            if (AIC->GetBrainComponent())
+            {
+                AIC->GetBrainComponent()->StopLogic("HitReaction");
+            }
+        }
+
+        
+        // E. 设置定时器：在 StunDuration 秒后，执行 RecoverFromStun 函数
+        // 如果再次受击，SetTimer 会自动重置时间（重置硬直）
+        GetWorldTimerManager().SetTimer(
+            StunTimerHandle, 
+            this, 
+            &AEnemies::RecoverFromStun, 
+            StunDuration, 
+            false
+        );
+    }
+
+
+    if (Health <= 0.f)
+    {
+        // 打印调试
+        if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("death"));
+        HandleDeath();
+    }
+    else
+    {
+        // 打印调试
+        if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, TEXT("hit"));
+
+        if (HitMontage)
+        {
+            PlayAnimMontage(HitMontage);
+        }
+        else
+        {
+            // 关键调试：如果这一行出来了，说明你在蓝图里没选资源！
+            if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("ERROR"));
         }
     }
 
@@ -101,7 +166,7 @@ void AEnemies::HandleDeath()
     }
 
     // 若干秒后销毁尸体
-    SetLifeSpan(5.0f);
+    SetLifeSpan(3.0f);
 }
 
 
@@ -164,14 +229,46 @@ void AEnemies::OnWeaponOverlap(UPrimitiveComponent* OverlappedComponent, AActor*
             UDamageType::StaticClass() // 伤害类型
         );
 
-        // 6. 打印调试信息
-        if (GEngine)
+        // // 6. 打印调试信息
+        // if (GEngine)
+        // {
+        //     FString Msg = FString::Printf(TEXT("target: %s, damage: %f"), *OtherActor->GetName(), BaseDamage);
+        //     GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, Msg);
+        // }
+    }
+}
+
+
+void AEnemies::RecoverFromStun()
+{
+    if (bIsDead) return; // 如果硬直期间死了，就不恢复了
+
+    // 获取 AI 控制器
+    AAIController* AIC = Cast<AAIController>(GetController());
+    if (AIC && AIC->GetBrainComponent())
+    {
+        // 重启行为树逻辑
+        AIC->GetBrainComponent()->RestartLogic();
+        
+        // 打印调试
+        // if(GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, TEXT("硬直结束，AI 恢复行动"));
+    }
+}
+
+void AEnemies::UpdateHealthUI()
+{
+    if (HealthBarWidgetComp)
+    {
+        // 获取真正的 Widget 实例，并转换为我们的 C++ 类型
+        UEnemyHealthBar* HealthBar = Cast<UEnemyHealthBar>(HealthBarWidgetComp->GetUserWidgetObject());
+        if (HealthBar)
         {
-            FString Msg = FString::Printf(TEXT("砍中了: %s, 造成伤害: %f"), *OtherActor->GetName(), BaseDamage);
-            GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, Msg);
+            float Percent = Health / MaxHealth;
+            HealthBar->UpdateHealthPercent(Percent);
         }
     }
 }
+
 
 // Called every frame
 void AEnemies::Tick(float DeltaTime)
