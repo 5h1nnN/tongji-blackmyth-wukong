@@ -21,7 +21,7 @@ AEnemies::AEnemies()
 	// --- 1. 初始化右手 (原有的) ---
     WeaponCollisionR = CreateDefaultSubobject<UBoxComponent>(TEXT("WeaponCollisionR"));
     WeaponCollisionR->SetupAttachment(GetMesh(), FName("FX_Trail_R_02")); // 绑定右手
-    WeaponCollisionR->SetBoxExtent(FVector(20.f, 20.f, 20.f));
+    WeaponCollisionR->SetBoxExtent(FVector(30.f, 30.f, 30.f));
     WeaponCollisionR->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     WeaponCollisionR->SetCollisionResponseToAllChannels(ECR_Ignore);
     WeaponCollisionR->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
@@ -29,7 +29,7 @@ AEnemies::AEnemies()
     // --- 2. 初始化左手 (新增的) ---
     WeaponCollisionL = CreateDefaultSubobject<UBoxComponent>(TEXT("WeaponCollisionL"));
     WeaponCollisionL->SetupAttachment(GetMesh(), FName("FX_Trail_L_02")); // 绑定左手
-    WeaponCollisionL->SetBoxExtent(FVector(20.f, 20.f, 20.f));
+    WeaponCollisionL->SetBoxExtent(FVector(30.f, 30.f, 30.f));
     WeaponCollisionL->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     WeaponCollisionL->SetCollisionResponseToAllChannels(ECR_Ignore);
     WeaponCollisionL->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
@@ -77,6 +77,29 @@ float AEnemies::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, 
         if (HitMontage)
         {
             PlayAnimMontage(HitMontage);
+        }
+    }
+
+
+    if (Health <= 0.f)
+    {
+        // 打印调试
+        if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("00death"));
+        HandleDeath();
+    }
+    else
+    {
+        // 打印调试
+        if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, TEXT("11hit"));
+
+        if (HitMontage)
+        {
+            PlayAnimMontage(HitMontage);
+        }
+        else
+        {
+            // 关键调试：如果这一行出来了，说明你在蓝图里没选资源！
+            if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("ERROR"));
         }
     }
 

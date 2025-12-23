@@ -90,6 +90,19 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Combat")
     bool IsDead() const { return bIsDead; }
 
+protected:
+    // 硬直控制
+    // 
+    // 硬直时间 (可以在蓝图调整，默认 1.5秒)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
+    float StunDuration = 1.5f;
+
+    // 定时器句柄 (用于管理倒计时)
+    FTimerHandle StunTimerHandle;
+
+    // 恢复行动的函数
+    void RecoverFromStun();
+
 
 public:
     // 每一帧调用
