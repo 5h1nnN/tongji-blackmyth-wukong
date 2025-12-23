@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "Logging/LogMacros.h"
+#include "BaseCharacter.h"
 #include "blackmyth_wukongCharacter.generated.h"
 
 // 前向声明
@@ -20,7 +21,7 @@ struct FInputActionValue;
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
 UCLASS(config = Game)
-class Ablackmyth_wukongCharacter : public ACharacter
+class Ablackmyth_wukongCharacter : public ABaseCharacter
 {
 	GENERATED_BODY()
 
@@ -63,9 +64,6 @@ class Ablackmyth_wukongCharacter : public ACharacter
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* DodgeAction;
 
-	// =================================================================
-	// [新增] 暂停系统输入
-	// =================================================================
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* PauseAction;
 
@@ -93,12 +91,7 @@ public:
 
 	virtual void Tick(float DeltaTime) override;
 
-	// --- 战斗参数配置 ---
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
-	float MaxHealth;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Health")
-	float CurrentHealth;
+	
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
 	float DodgeCooldownTime;
@@ -132,9 +125,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
 	TSubclassOf<class UUserWidget> GameOverWidgetClass;
 
-	// =================================================================
-	// [新增] 暂停菜单 UI 类引用
-	// =================================================================
 
 	/** 暂停菜单的蓝图类 (WBP_PauseMenu) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
@@ -200,9 +190,6 @@ protected:
 	void ResetHitReactState();
 	void CheckLevelUp();
 
-	// =================================================================
-	// [新增] 暂停功能函数
-	// =================================================================
 	void TogglePause(const FInputActionValue& Value);
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "RPG System")
