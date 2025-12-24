@@ -5,7 +5,7 @@
 #include "Perception/AIPerceptionComponent.h"
 #include "Perception/AISenseConfig_Sight.h"
 #include "blackmyth_wukong/blackmyth_wukongCharacter.h"
-#include "InputActionValue.h" // 引用输入值结构
+#include "InputActionValue.h" 
 
 ACloneAIController::ACloneAIController()
 {
@@ -18,12 +18,11 @@ ACloneAIController::ACloneAIController()
 	SightConfig = CreateDefaultSubobject<UAISenseConfig_Sight>(TEXT("SightConfig"));
 	if (SightConfig)
 	{
-		SightConfig->SightRadius = 1500.0f;           // 15米视野
+		SightConfig->SightRadius = 1500.0f;
 		SightConfig->LoseSightRadius = 2000.0f;
-		SightConfig->PeripheralVisionAngleDegrees = 180.0f; // 360度全方位感知(防止怪物在背后挨打不还手)
+		SightConfig->PeripheralVisionAngleDegrees = 180.0f; // 360度感知
 		SightConfig->SetMaxAge(5.0f);
 
-		// 必须开启这三个，否则感知不到任何东西
 		SightConfig->DetectionByAffiliation.bDetectEnemies = true;
 		SightConfig->DetectionByAffiliation.bDetectNeutrals = true;
 		SightConfig->DetectionByAffiliation.bDetectFriendlies = true;
@@ -46,7 +45,6 @@ void ACloneAIController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
 
-	// 运行行为树
 	if (InPawn && BehaviorTreeAsset)
 	{
 		BlackboardComp->InitializeBlackboard(*BehaviorTreeAsset->BlackboardAsset);
@@ -56,46 +54,65 @@ void ACloneAIController::OnPossess(APawn* InPawn)
 
 void ACloneAIController::OnTargetDetected(AActor* Actor, FAIStimulus Stimulus)
 {
-	// 核心逻辑：只锁定带有 "TeamMonster" 标签的敌人
+
+	// --- 调试日志 (英文版，防止编译报错) ---
+	FString Info = FString::Printf(TEXT("AI Perception: Target[%s] | Sensed[%s] | TagMatch[%s]"),
+		*Actor->GetName(),
+		Stimulus.WasSuccessfullySensed() ? TEXT("YES") : TEXT("NO"),
+		Actor->ActorHasTag(FName("Enemy")) ? TEXT("YES") : TEXT("NO")
+	);
+
+	// 打印红色日志到屏幕
+	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Red, Info);
+	// --- 调试日志结束 ---
+
+	// 简单逻辑：只要看到带有 Enemy 标签的，就锁定为目标
 	if (Stimulus.WasSuccessfullySensed())
 	{
-		// 如果看到的东西是 Character 且 带有 TeamMonster 标签
-		if (Actor->ActorHasTag(FName("TeamMonster")))
+		if (Actor->ActorHasTag(FName("Enemy")))
 		{
-			// 锁定目标
 			GetBlackboardComponent()->SetValueAsObject(TargetKeyName, Actor);
 		}
 	}
 	else
 	{
-		// 丢失视野逻辑 (可选：是否清除目标)
-		// 简单的做法是：如果当前目标就是丢失的这个，清除它
-		if (GetBlackboardComponent()->GetValueAsObject(TargetKeyName) == Actor)
-		{
-			GetBlackboardComponent()->ClearValue(TargetKeyName);
-		}
+		// 丢失视野时不立即清除，让 AI 跑到最后看到的位置（BehaviorTree 处理）
+		// 如果需要立即清除，取消下面注释：
+		// if (GetTargetEnemy() == Actor) GetBlackboardComponent()->ClearValue(TargetKeyName);
 	}
 }
 
-void ACloneAIController::TryAttackTarget()
+AActor* ACloneAIController::GetTargetEnemy() const
+{
+	if (BlackboardComp)
+	{
+		return Cast<AActor>(BlackboardComp->GetValueAsObject(TargetKeyName));
+	}
+	return nullptr;
+}
+
+bool ACloneAIController::TryAttackTarget()
 {
 	Ablackmyth_wukongCharacter* MyChar = Cast<Ablackmyth_wukongCharacter>(GetPawn());
-	AActor* Target = Cast<AActor>(GetBlackboardComponent()->GetValueAsObject(TargetKeyName));
+	AActor* Target = GetTargetEnemy();
 
 	if (MyChar && Target)
 	{
-		// 计算距离，如果在攻击范围内 (例如 200)
 		float Distance = FVector::Dist(MyChar->GetActorLocation(), Target->GetActorLocation());
-		if (Distance <= 200.0f)
-		{
-			// 面向敌人
-			FVector Direction = (Target->GetActorLocation() - MyChar->GetActorLocation()).GetSafeNormal();
-			FRotator LookRot = Direction.Rotation();
-			MyChar->SetActorRotation(FRotator(0, LookRot.Yaw, 0));
 
-			// 触发轻攻击 (模拟按键)
+		// 攻击范围判定 (例如 220 厘米)
+		if (Distance <= 220.0f)
+		{
+			// 1. 瞬间转向敌人 (简化版，平滑转向可在 BT 中做)
+			FVector Direction = (Target->GetActorLocation() - MyChar->GetActorLocation()).GetSafeNormal();
+			Direction.Z = 0;
+			MyChar->SetActorRotation(Direction.Rotation());
+
+			// 2. 触发攻击
 			FInputActionValue DummyValue;
 			MyChar->PerformLightAttack(DummyValue);
+			return true; // 攻击成功
 		}
 	}
+	return false; // 距离太远或无目标
 }

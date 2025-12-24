@@ -36,14 +36,20 @@ protected:
 	class UBehaviorTree* BehaviorTreeAsset;
 
 	UPROPERTY(EditDefaultsOnly, Category = "AI")
-	FName TargetKeyName = "TargetActor";
+	FName TargetKeyName = "TargetActor"; // 对应黑板中的 Object Key
 
 	// --- 感知回调 ---
 	UFUNCTION()
 	void OnTargetDetected(AActor* Actor, FAIStimulus Stimulus);
 
 public:
-	// --- 战斗接口 (供行为树调用) ---
+	// --- 接口 (供行为树调用) ---
+
+	// 尝试攻击目标。返回 true 表示距离足够并执行了攻击，返回 false 表示距离太远需要追逐
 	UFUNCTION(BlueprintCallable, Category = "AI")
-	void TryAttackTarget();
+	bool TryAttackTarget();
+
+	// 获取当前锁定的目标
+	UFUNCTION(BlueprintPure, Category = "AI")
+	AActor* GetTargetEnemy() const;
 };

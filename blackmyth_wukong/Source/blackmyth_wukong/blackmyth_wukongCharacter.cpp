@@ -99,8 +99,8 @@ void Ablackmyth_wukongCharacter::BeginPlay()
 		// 视角限制
 		if (PlayerController->PlayerCameraManager)
 		{
-			PlayerController->PlayerCameraManager->ViewPitchMin = -60.0f;
-			PlayerController->PlayerCameraManager->ViewPitchMax = 45.0f;
+			PlayerController->PlayerCameraManager->ViewPitchMin = -40.0f;
+			PlayerController->PlayerCameraManager->ViewPitchMax = 40.0f;
 		}
 	}
 
@@ -210,7 +210,7 @@ void Ablackmyth_wukongCharacter::SetupPlayerInputComponent(UInputComponent* Play
 // =================================================================
 void Ablackmyth_wukongCharacter::PerformCloneSkill(const FInputActionValue& Value)
 {
-	// 1. 检查条件
+	// 1. 状态检查
 	if (bIsCloneSkillCooldown || bIsDead || bIsHitReacting || bIsDodging || GetCharacterMovement()->IsFalling()) return;
 
 	ResetIdleTimer();
@@ -227,7 +227,7 @@ void Ablackmyth_wukongCharacter::PerformCloneSkill(const FInputActionValue& Valu
 		AnimInstance->Montage_Play(CloneSummonMontage);
 	}
 
-	// 3. 循环生成
+	// 3. 准备生成参数
 	UClass* SpawnClass = CloneClass ? CloneClass.Get() : GetClass();
 	if (!SpawnClass) return;
 
@@ -235,16 +235,17 @@ void Ablackmyth_wukongCharacter::PerformCloneSkill(const FInputActionValue& Valu
 	FRotator SpawnRot = GetActorRotation();
 	float AngleStep = 360.0f / CloneCount;
 
+	// 4. 循环生成
 	for (int32 i = 0; i < CloneCount; i++)
 	{
 		float CurrentAngle = i * AngleStep;
 		float Rad = FMath::DegreesToRadians(CurrentAngle);
 
-		// 计算圆形分布坐标
+		// 计算位置
 		FVector Offset(FMath::Cos(Rad) * CloneSpawnRadius, FMath::Sin(Rad) * CloneSpawnRadius, 0.0f);
 		FVector PotentialLoc = CenterLoc + Offset;
 
-		// 地面检测 (防止生成在墙里或空中)
+		// 地面检测
 		FVector TraceStart = PotentialLoc + FVector(0, 0, 200.0f);
 		FVector TraceEnd = PotentialLoc - FVector(0, 0, 200.0f);
 		FHitResult HitResult;
@@ -257,14 +258,17 @@ void Ablackmyth_wukongCharacter::PerformCloneSkill(const FInputActionValue& Valu
 
 		FActorSpawnParameters SpawnParams;
 		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-		SpawnParams.Owner = this;
+		SpawnParams.Owner = this; // [关键] 设置Owner为本体，用于识别敌我
 
 		// 生成 Actor
 		ACharacter* NewClone = GetWorld()->SpawnActor<ACharacter>(SpawnClass, FinalLoc, SpawnRot, SpawnParams);
 		if (NewClone)
 		{
-			// [重要] 赋予 AI 灵魂
+			// [关键] 赋予 AI 控制器
 			NewClone->SpawnDefaultController();
+
+			// [关键] 添加标签 (Clone)，防止被友军误伤
+			NewClone->Tags.Add(FName("Clone"));
 
 			// 播放特效
 			if (CloneSpawnFX)
@@ -276,7 +280,7 @@ void Ablackmyth_wukongCharacter::PerformCloneSkill(const FInputActionValue& Valu
 		}
 	}
 
-	// 4. 设置冷却与销毁
+	// 5. 设置冷却
 	bIsCloneSkillCooldown = true;
 	GetWorldTimerManager().SetTimer(CloneCooldownTimer, this, &Ablackmyth_wukongCharacter::ResetCloneSkillCooldown, CloneSkillCooldown, false);
 	GetWorldTimerManager().SetTimer(CloneLifeTimer, this, &Ablackmyth_wukongCharacter::DestroyClones, CloneLifeSpan, false);
@@ -478,16 +482,36 @@ void Ablackmyth_wukongCharacter::CheckAttackHit(float CurrentRange)
 	if (bIsDead) return;
 	FVector Start = GetActorLocation();
 	FVector End = Start + (GetActorForwardVector() * CurrentRange);
+
 	TArray<TEnumAsByte<EObjectTypeQuery>> ObjectTypes;
 	ObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECC_Pawn));
 	ObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECC_PhysicsBody));
 	ObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECC_WorldDynamic));
+
 	TArray<AActor*> ActorsToIgnore;
-	ActorsToIgnore.Add(this);
-	for (ACharacter* Clone : ActiveClones) { if (Clone) ActorsToIgnore.Add(Clone); }
+	ActorsToIgnore.Add(this); // 忽略自己
+
+	// [新增] 逻辑：如果我有 Owner (说明我是分身)，我也要忽略我的 Owner
+	if (GetOwner())
+	{
+		ActorsToIgnore.Add(GetOwner());
+	}
+
+	// [新增] 逻辑：如果我是本体，忽略我的所有分身
+	for (ACharacter* Clone : ActiveClones)
+	{
+		if (Clone) ActorsToIgnore.Add(Clone);
+	}
+
+	// [新增] 逻辑：尝试忽略所有其他的友军分身 (通过 Tag 判断)
+	// 防止分身之间互殴
+	TArray<AActor*> AllClones;
+	UGameplayStatics::GetAllActorsWithTag(GetWorld(), FName("Clone"), AllClones);
+	ActorsToIgnore.Append(AllClones);
 
 	TArray<FHitResult> OutHits;
-	bool bHit = UKismetSystemLibrary::SphereTraceMultiForObjects(GetWorld(), Start, End, 80.0f, ObjectTypes, false, ActorsToIgnore, false ? EDrawDebugTrace::ForDuration : EDrawDebugTrace::None, OutHits, true);
+	bool bHit = UKismetSystemLibrary::SphereTraceMultiForObjects(GetWorld(), Start, End, 80.0f, ObjectTypes, false, ActorsToIgnore, EDrawDebugTrace::None, OutHits, true);
+
 	if (bHit)
 	{
 		TSet<AActor*> HitActors;
@@ -497,6 +521,7 @@ void Ablackmyth_wukongCharacter::CheckAttackHit(float CurrentRange)
 			if (HitActor && !HitActors.Contains(HitActor))
 			{
 				HitActors.Add(HitActor);
+				// 造成伤害
 				UGameplayStatics::ApplyDamage(HitActor, GetTotalAttackPower(), GetController(), this, UDamageType::StaticClass());
 			}
 		}
