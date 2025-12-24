@@ -105,6 +105,19 @@ protected:
     // 恢复行动的函数
     void RecoverFromStun();
 
+
+protected:
+    // 转身攻击蒙太奇 (在蓝图中赋值)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
+    UAnimMontage* TurnAttackMontage;
+
+    // 判断攻击者是否在身后
+    bool IsAttackerBehind(AActor* Attacker);
+
+    // 强制转向攻击者的辅助函数
+    void RotateToFaceActor(AActor* TargetActor);
+
+
 protected:
     // UI 组件
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "UI")

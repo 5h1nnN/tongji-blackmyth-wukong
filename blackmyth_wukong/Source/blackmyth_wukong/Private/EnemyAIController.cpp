@@ -8,6 +8,7 @@
 #include "Perception/AIPerceptionComponent.h"
 #include "Perception/AISenseConfig_Sight.h"
 #include "GameFramework/Character.h"
+#include "Enemies.h" 
 
 AEnemyAIController::AEnemyAIController()
 {
@@ -25,7 +26,7 @@ AEnemyAIController::AEnemyAIController()
     {
         SightConfig->SightRadius = 2000.0f;           // 视距 20米
         SightConfig->LoseSightRadius = 2500.0f;       // 丢失视距
-        SightConfig->PeripheralVisionAngleDegrees = 90.0f; // 视野角度 180度
+        SightConfig->PeripheralVisionAngleDegrees = 135.0f; // 视野角度 180度
         SightConfig->SetMaxAge(5.0f);                 // 记忆时间
 
         // 关键：检测中立阵营 (玩家通常是 Neutral)
@@ -71,6 +72,15 @@ void AEnemyAIController::OnPossess(APawn* InPawn)
 // 对应蓝图中的 "On Target Perception Updated"
 void AEnemyAIController::OnTargetDetected(AActor* Actor, FAIStimulus Stimulus)
 {
+    // A. 排除无效对象和自己
+    if (!Actor || Actor == GetPawn()) return;
+
+    // B. 关键过滤：如果看到的也是一个 Enemy 类，说明是队友，直接忽略！
+    if (Actor->IsA(AEnemies::StaticClass()))
+    {
+        return;
+    }
+
     // 过滤：只关注 Character 类型 (即玩家)
     if (auto* SensedCharacter = Cast<ACharacter>(Actor))
     {
