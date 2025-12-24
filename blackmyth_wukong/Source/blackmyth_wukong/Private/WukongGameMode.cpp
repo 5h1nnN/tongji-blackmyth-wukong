@@ -15,7 +15,6 @@ AActor* AWukongGameMode::ChoosePlayerStart_Implementation(AController* Player)
     for (TActorIterator<AMyPlayerStart> It(GetWorld()); It; ++It)
     {
         AMyPlayerStart* CurrentSpawnPoint = *It;
-
         // 如果找到了一个出生点，且它的 ID 匹配我们需要的值
         if (CurrentSpawnPoint && CurrentSpawnPoint->SpawnTeamID == RequiredTeamID)
         {
