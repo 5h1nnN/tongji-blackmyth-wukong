@@ -232,7 +232,13 @@ void AEnemies::OnWeaponOverlap(UPrimitiveComponent* OverlappedComponent, AActor*
     // 1. 基本检查：必须有对象，且不是自己
     if (!OtherActor || OtherActor == this) return;
 
-    // 2. 阵营检查：如果是 Character (比如玩家)
+    // 2. 排除队友：如果受害者也是 AEnemies 类，直接无视
+    if (OtherActor->IsA(AEnemies::StaticClass()))
+    {
+        return; // 是队友，什么都不做，直接返回
+    }
+
+    // 如果是 Character (比如玩家)
     // 这里简单用 Cast 判断，实际项目中通常用 Tag 或 Interface 区分敌我
     if (OtherActor->IsA(ACharacter::StaticClass())) 
     {
