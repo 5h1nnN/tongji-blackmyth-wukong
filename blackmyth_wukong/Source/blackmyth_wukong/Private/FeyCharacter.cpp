@@ -1,4 +1,5 @@
 #include "FeyCharacter.h"
+#include "BaseProjectile.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/Controller.h"
@@ -106,6 +107,10 @@ void AFeyCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 		{
 			EIC->BindAction(TransformAction, ETriggerEvent::Started, this, &ABaseCharacter::TransformCharacter);
 		}
+		if (AttackAction)
+		{
+			EIC->BindAction(AttackAction, ETriggerEvent::Started, this, &AFeyCharacter::Attack);
+		}
 	}
 }
 
@@ -140,4 +145,32 @@ void AFeyCharacter::Look(const FInputActionValue& Value)
 		AddControllerYawInput(LookAxisVector.X);
 		AddControllerPitchInput(LookAxisVector.Y);
 	}
+}
+// 实现 Attack
+void AFeyCharacter::Attack()
+{
+	// 只播放攻击动画
+	if (AttackMontage)
+	{
+		PlayAnimMontage(AttackMontage);
+	}
+}
+
+void AFeyCharacter::ExecuteSpawnProjectile()
+{
+	if (ProjectileClass)
+    {
+        FVector SpawnLocation = GetActorLocation() + GetActorForwardVector() * 50.f;
+        FRotator SpawnRotation = GetActorRotation();
+		SpawnRotation.Pitch = 0.0f; // 强制水平
+		SpawnRotation.Roll = 0.0f;  // 强制水平
+
+        FActorSpawnParameters Params;
+        Params.Owner = this;
+        Params.Instigator = this;
+        Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+        GetWorld()->SpawnActor<ABaseProjectile>(ProjectileClass, SpawnLocation, SpawnRotation, Params);
+	}
+	
 }

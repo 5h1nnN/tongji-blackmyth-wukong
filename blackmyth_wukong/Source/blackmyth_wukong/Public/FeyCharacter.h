@@ -13,6 +13,7 @@ class UInputAction;
 class UAnimMontage;
 class UAnimSequence;
 class UUserWidget; // [新增] 必须声明，否则识别不了 UI 类
+class ABaseProjectile;
 struct FInputActionValue;
 
 UCLASS()
@@ -22,6 +23,9 @@ class BLACKMYTH_WUKONG_API AFeyCharacter : public ABaseCharacter
 
 public:
 	AFeyCharacter();
+
+	UFUNCTION(BlueprintCallable)
+	void ExecuteSpawnProjectile();
 
 protected:
 	virtual void BeginPlay() override;
@@ -58,10 +62,22 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	class UInputAction* JumpAction;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* AttackAction;
 
+	/** 飞行物蓝图类 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat")
+	TSubclassOf<class ABaseProjectile> ProjectileClass;
+
+	/** 攻击动画蒙太奇 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
+	class UAnimMontage* AttackMontage;
+
+	/** 攻击函数 */
+	void Attack();
 	/** --- 输入处理函数 --- */
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
 
-	
+
 };
