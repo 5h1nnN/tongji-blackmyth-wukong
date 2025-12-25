@@ -10,6 +10,7 @@
 
 
 class UBoxComponent;
+class ASparrowProjectile;
 
 UCLASS()
 class BLACKMYTH_WUKONG_API AEnemies : public ACharacter
@@ -116,6 +117,21 @@ protected:
 
     // 强制转向攻击者的辅助函数
     void RotateToFaceActor(AActor* TargetActor);
+
+
+protected:
+    // 箭矢蓝图类 (在编辑器里选 BP_SparrowArrow)
+    UPROPERTY(EditDefaultsOnly, Category = "Combat | Ranged")
+    TSubclassOf<ASparrowProjectile> ProjectileClass;
+
+    // 发射插槽名称 (Paragon 资源通常叫 "Muzzle_01" 或 "WeaponSocket")
+    UPROPERTY(EditDefaultsOnly, Category = "Combat | Ranged")
+    FName RangedSocketName;
+
+public:
+    // 发射函数 (供动画通知调用)
+    UFUNCTION(BlueprintCallable, Category = "Combat | Ranged")
+    void FireRangedAttack();
 
 
 protected:
