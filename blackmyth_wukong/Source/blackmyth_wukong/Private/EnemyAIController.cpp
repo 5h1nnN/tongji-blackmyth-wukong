@@ -89,7 +89,7 @@ void AEnemyAIController::OnTargetDetected(AActor* Actor, FAIStimulus Stimulus)
         {
             // 看见了 -> 写入黑板
             GetBlackboardComponent()->SetValueAsObject(TargetActorKeyName, SensedCharacter);
-
+            SetFocus(SensedCharacter);
             // 调试打印
             // if(GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Green, TEXT("看见玩家了！"));
         }
@@ -97,7 +97,7 @@ void AEnemyAIController::OnTargetDetected(AActor* Actor, FAIStimulus Stimulus)
         {
             // 丢失视野 -> 清空黑板
             GetBlackboardComponent()->ClearValue(TargetActorKeyName);
-
+            ClearFocus(EAIFocusPriority::Gameplay);
             // 调试打印
             // if(GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Red, TEXT("跟丢了！"));
         }

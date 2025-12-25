@@ -2,6 +2,8 @@
 
 
 #include "Enemies.h"
+#include "SparrowProjectile.h"
+#include "Engine/World.h"
 #include "Components/BoxComponent.h" // 引入 BoxComponent 头文件
 #include "Kismet/GameplayStatics.h"  // 引入玩法统计库（用于造成伤害）
 #include "Components/CapsuleComponent.h"
@@ -43,6 +45,8 @@ AEnemies::AEnemies()
     // 设置默认属性
     HealthBarWidgetComp->SetWidgetSpace(EWidgetSpace::Screen); // Screen模式会让血条永远面向摄像机
     HealthBarWidgetComp->SetDrawSize(FVector2D(100.f, 10.f)); // 默认大小
+
+    RangedSocketName = TEXT("Muzzle_01");
 }
 
 // Called when the game starts or when spawned	
@@ -321,6 +325,64 @@ void AEnemies::RotateToFaceActor(AActor* TargetActor)
 }
 
 
+void AEnemies::FireRangedAttack()
+{
+    // 0. 安全检查
+    if (!GetWorld() || !GetMesh()) return;
+    if (bIsDead) return;
+
+    // 1. 检查有没有设置箭的蓝图
+    if (!ProjectileClass)
+    {
+        // if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("Error: ProjectileClass is NULL in Enemies BP!"));
+        return;
+    }
+
+    // 2. 计算发射位置和方向
+    FVector SocketLoc;
+    FRotator SocketRot;
+
+    // 尝试从插槽获取
+    if (GetMesh()->DoesSocketExist(RangedSocketName))
+    {
+        SocketLoc = GetMesh()->GetSocketLocation(RangedSocketName);
+
+        // --- 智能瞄准逻辑 ---
+        // 如果我们是AI，并且锁定了目标，我们应该朝目标射击，而不是只看手指向哪里
+        AAIController* AIC = Cast<AAIController>(GetController());
+        if (AIC && AIC->GetFocusActor())
+        {
+            FVector TargetLoc = AIC->GetFocusActor()->GetActorLocation();
+            // 计算从发射点到目标的朝向
+            SocketRot = UKismetMathLibrary::FindLookAtRotation(SocketLoc, TargetLoc);
+        }
+        else
+        {
+            // 如果没有锁定目标，就沿着插槽朝向发射
+            SocketRot = GetMesh()->GetSocketRotation(RangedSocketName);
+        }
+    }
+    else
+    {
+        // 容错：如果没有插槽，从胸前发射
+        SocketLoc = GetActorLocation() + GetActorForwardVector() * 50.f + FVector(0, 0, 50.f);
+        SocketRot = GetActorRotation();
+    }
+
+    // 3. 配置生成参数
+    FActorSpawnParameters SpawnParams;
+    SpawnParams.Owner = this; // 这一点很重要，确保箭矢知道是敌人射的，OnHit里才能获取 Instigator
+    SpawnParams.Instigator = this;
+    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn; // 强制生成
+
+    // 4. 生成箭矢
+    GetWorld()->SpawnActor<ASparrowProjectile>(
+        ProjectileClass,
+        SocketLoc,
+        SocketRot,
+        SpawnParams
+    );
+}
 
 void AEnemies::UpdateHealthUI()
 {
