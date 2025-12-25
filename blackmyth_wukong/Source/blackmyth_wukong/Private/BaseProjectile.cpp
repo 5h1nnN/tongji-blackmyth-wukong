@@ -11,7 +11,12 @@ ABaseProjectile::ABaseProjectile()
 	// 1. 设置碰撞
 	CollisionComp = CreateDefaultSubobject<USphereComponent>(TEXT("SphereComp"));
 	CollisionComp->InitSphereRadius(10.0f);
-	CollisionComp->BodyInstance.SetCollisionProfileName("Projectile");
+	CollisionComp->SetNotifyRigidBodyCollision(true);
+	CollisionComp->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	CollisionComp->SetCollisionObjectType(ECC_WorldDynamic);
+	CollisionComp->SetCollisionResponseToAllChannels(ECR_Ignore); // 默认忽略
+	CollisionComp->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Block); // 撞动态物体
+	CollisionComp->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block); // 阻挡敌人
 	CollisionComp->OnComponentHit.AddDynamic(this, &ABaseProjectile::OnHit);
 	RootComponent = CollisionComp;
 
@@ -34,10 +39,30 @@ ABaseProjectile::ABaseProjectile()
 void ABaseProjectile::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// 1. 获取发射者
+	AActor* MyOwner = GetOwner();
+	if (MyOwner)
+	{
+		// 2. 让碰撞组件忽略掉发射者
+		CollisionComp->IgnoreActorWhenMoving(MyOwner, true);
+
+		// 如果 MyOwner 是角色，可能还需要忽略它的子组件
+		MyOwner->SetInstigator(Cast<APawn>(MyOwner));
+	}
+
+	// 强制开启命中事件
+	CollisionComp->SetNotifyRigidBodyCollision(true);
 }
 
 void ABaseProjectile::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit)
 {
+	if (OtherActor)
+	{
+		// 打印撞到的所有东西
+		UE_LOG(LogTemp, Warning, TEXT("Projectile Hit: %s"), *OtherActor->GetName());
+	}
+
 	if ((OtherActor != nullptr) && (OtherActor != this) && (OtherActor != GetOwner()))
 	{
 		// 1. 应用伤害

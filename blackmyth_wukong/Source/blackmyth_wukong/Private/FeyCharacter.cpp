@@ -149,10 +149,19 @@ void AFeyCharacter::Look(const FInputActionValue& Value)
 // 实现 Attack
 void AFeyCharacter::Attack()
 {
+	// 只播放攻击动画
+	if (AttackMontage)
+	{
+		PlayAnimMontage(AttackMontage);
+	}
+}
+
+void AFeyCharacter::ExecuteSpawnProjectile()
+{
 	if (ProjectileClass)
     {
         FVector SpawnLocation = GetActorLocation() + GetActorForwardVector() * 50.f;
-        FRotator SpawnRotation = GetControlRotation();
+        FRotator SpawnRotation = GetActorRotation();
 		SpawnRotation.Pitch = 0.0f; // 强制水平
 		SpawnRotation.Roll = 0.0f;  // 强制水平
 
@@ -162,10 +171,6 @@ void AFeyCharacter::Attack()
         Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
         GetWorld()->SpawnActor<ABaseProjectile>(ProjectileClass, SpawnLocation, SpawnRotation, Params);
-		// 播放攻击动画
-		if (AttackMontage)
-		{
-			PlayAnimMontage(AttackMontage);
-		}
 	}
+	
 }

@@ -17,5 +17,4 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Visual")
 	class UNiagaraComponent* TrailEffect;
 
-	// 如果 Fey 的子弹有特殊逻辑（比如追踪），可以重写 OnHit 或 Tick
 };

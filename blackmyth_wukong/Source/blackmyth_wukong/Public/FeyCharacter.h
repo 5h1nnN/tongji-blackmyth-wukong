@@ -24,6 +24,9 @@ class BLACKMYTH_WUKONG_API AFeyCharacter : public ABaseCharacter
 public:
 	AFeyCharacter();
 
+	UFUNCTION(BlueprintCallable)
+	void ExecuteSpawnProjectile();
+
 protected:
 	virtual void BeginPlay() override;
 	/** 自动变回原型的时间（秒） */
@@ -76,5 +79,5 @@ protected:
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
 
-	
+
 };
