@@ -47,6 +47,18 @@ AEnemies::AEnemies()
     HealthBarWidgetComp->SetDrawSize(FVector2D(100.f, 10.f)); // 默认大小
 
     RangedSocketName = TEXT("Muzzle_01");
+
+    // 1. 创建组件
+    ImmobilizeIconWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("ImmobilizeIcon"));
+    ImmobilizeIconWidget->SetupAttachment(GetRootComponent());
+
+    // 2. 设置默认属性
+    ImmobilizeIconWidget->SetWidgetSpace(EWidgetSpace::Screen); // Screen模式：始终面向屏幕，不管敌人怎么转
+    ImmobilizeIconWidget->SetDrawAtDesiredSize(true);           // 自动调整大小
+    ImmobilizeIconWidget->SetVisibility(false);                 // 默认隐藏
+
+    // 设置位置 (根据你的模型调整 Z 值，大概在头顶位置)
+    ImmobilizeIconWidget->SetRelativeLocation(FVector(0.f, 0.f, 150.f));
 }
 
 // Called when the game starts or when spawned	
@@ -409,4 +421,72 @@ void AEnemies::Tick(float DeltaTime)
 void AEnemies::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
+}
+
+void AEnemies::OnImmobilized_Implementation(float Duration)
+{
+    UE_LOG(LogTemp, Warning, TEXT(" %s frozen, duration: %f"), *GetName(), Duration);
+    // 1. 停止 AI 逻辑 (行为树)
+    if (AAIController* AICon = Cast<AAIController>(GetController()))
+    {
+        if (UBrainComponent* Brain = AICon->GetBrainComponent())
+        {
+            Brain->StopLogic("Immobilize");
+        }
+        AICon->StopMovement();
+    }
+
+    // 2. 冻结位移组件 (防止物理或者动量继续移动)
+    GetCharacterMovement()->DisableMovement();
+    GetCharacterMovement()->StopMovementImmediately();
+
+    // 仅冻结Mesh动画
+    GetMesh()->bPauseAnims = true;
+
+    // 4. 视觉效果 (在蓝图中实现材质变化、粒子生成)
+    BP_OnImmobilizeVisuals(true);
+
+    // 显示 UI
+    if (ImmobilizeIconWidget)
+    {
+        ImmobilizeIconWidget->SetVisibility(true);
+    }
+
+    // 5. 设置定时器自动解除
+    GetWorld()->GetTimerManager().SetTimer(TimerHandle_Immobilize, this, &AEnemies::HandleImmobilizeTimeout, Duration, false);
+}
+
+void AEnemies::HandleImmobilizeTimeout()
+{
+    // 调用接口的解除函数
+    Execute_OnUnImmobilized(this);
+}
+
+void AEnemies::OnUnImmobilized_Implementation()
+{
+    // 清除定时器 (如果是被攻击提前打断，需要手动清除)
+    GetWorld()->GetTimerManager().ClearTimer(TimerHandle_Immobilize);
+
+    // 1. 恢复 AI
+    if (AAIController* AICon = Cast<AAIController>(GetController()))
+    {
+        if (UBrainComponent* Brain = AICon->GetBrainComponent())
+        {
+            Brain->RestartLogic();
+        }
+    }
+
+    // 2. 恢复移动模式
+    GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+
+    // 3. 恢复动画
+    GetMesh()->bPauseAnims = false;
+
+    // 4. 关闭视觉特效
+    BP_OnImmobilizeVisuals(false);
+    // 隐藏 UI
+    if (ImmobilizeIconWidget)
+    {
+        ImmobilizeIconWidget->SetVisibility(false);
+    }
 }

@@ -15,7 +15,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Blueprint/UserWidget.h"
-
+#include "ImmobilizableInterface.h"
 // [新增] 导航系统相关头文件
 #include "NavMesh/NavMeshBoundsVolume.h"
 #include "NavigationSystem.h"
@@ -198,6 +198,12 @@ void Ablackmyth_wukongCharacter::SetupPlayerInputComponent(UInputComponent* Play
 		if (CloneAction)
 		{
 			EnhancedInputComponent->BindAction(CloneAction, ETriggerEvent::Started, this, &Ablackmyth_wukongCharacter::PerformCloneSkill);
+		}
+
+		// 绑定定身术
+		if (ImmobilizeAction)
+		{
+			EnhancedInputComponent->BindAction(ImmobilizeAction, ETriggerEvent::Started, this, &Ablackmyth_wukongCharacter::Immobilize);
 		}
 
 		if (PauseAction)
@@ -646,4 +652,94 @@ void Ablackmyth_wukongCharacter::ResumeGameFromUI()
 {
 	// 直接复用 TogglePause 的逻辑来取消暂停
 	TogglePause(FInputActionValue());
+}
+
+void Ablackmyth_wukongCharacter::Immobilize(const FInputActionValue& Value)
+{
+	// 先检查状态
+	if (bIsDead) return;
+
+	// IsTimerActive 返回 true 说明还在倒计时，不能放技能
+	if (GetWorldTimerManager().IsTimerActive(TimerHandle_ImmobilizeCooldown))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("技能冷却中..."));
+		return;
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("freeze!"));
+
+	// 调用具体的技能逻辑
+	CastImmobilizeSkill();
+
+	// 启动冷却计时器
+	GetWorldTimerManager().SetTimer(TimerHandle_ImmobilizeCooldown, ImmobilizeCooldownTime, false);
+}
+
+void Ablackmyth_wukongCharacter::CastImmobilizeSkill()
+{
+	// 1. 这里应该播放悟空的“指人”蒙太奇动画
+	// PlayAnimMontage(ImmobilizeMontage)...
+
+	// 2. 寻找目标：这里用简单的球形射线检测 (SphereTrace)
+	FVector Start = GetActorLocation();
+	FVector Forward = GetActorForwardVector();
+	FVector End = Start + (Forward * ImmobilizeRange);
+
+	TArray<AActor*> ActorsToIgnore;
+	ActorsToIgnore.Add(this);
+
+	FHitResult HitResult;
+
+	bool bHit = UKismetSystemLibrary::SphereTraceSingle(
+		this,
+		Start,
+		End,
+		50.0f, // 扫描半径
+		UEngineTypes::ConvertToTraceType(ECC_Pawn),
+		false,
+		ActorsToIgnore,
+		EDrawDebugTrace::ForDuration, // 调试用，可以看到红线
+		HitResult,
+		true
+	);
+
+	if (bHit)
+	{
+		// 打印撞到的物体名字
+		UE_LOG(LogTemp, Error, TEXT("射线撞到了: %s"), *HitResult.GetActor()->GetName());
+
+		// 打印撞到的组件名字 (有助于区分是撞到了胶囊体还是武器Mesh)
+		UE_LOG(LogTemp, Error, TEXT("撞到的组件: %s"), *HitResult.GetComponent()->GetName());
+	}
+
+	if (bHit && HitResult.GetActor())
+	{
+		AActor* HitActor = HitResult.GetActor();
+
+		// 3. 检查是否实现了定身接口
+		if (HitActor->Implements<UImmobilizableInterface>())
+		{
+			// 4. 调用接口方法
+			IImmobilizableInterface::Execute_OnImmobilized(HitActor, ImmobilizeDuration);
+
+			UE_LOG(LogTemp, Warning, TEXT("freezing %s"), *HitActor->GetName());
+			// 可选：播放命中音效、UI提示“定”
+		}
+	}
+}
+
+float Ablackmyth_wukongCharacter::GetImmobilizeCooldownPercent() const
+{
+	// 如果计时器没在跑，说明冷却好了，进度是 1.0 (满)
+	if (!GetWorldTimerManager().IsTimerActive(TimerHandle_ImmobilizeCooldown))
+	{
+		return 1.0f;
+	}
+
+	// 获取剩余时间
+	float Remaining = GetWorldTimerManager().GetTimerRemaining(TimerHandle_ImmobilizeCooldown);
+
+	// 计算百分比: 1.0 - (剩余 / 总长)
+	// 效果：刚放完是 0，慢慢涨到 1
+	return 1.0f - (Remaining / ImmobilizeCooldownTime);
 }

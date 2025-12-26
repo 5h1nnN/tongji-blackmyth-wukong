@@ -70,6 +70,10 @@ class Ablackmyth_wukongCharacter : public ABaseCharacter
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* SpecialSkillAction;
 
+	/** 定身术输入操作 (IA_Immobilize) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	UInputAction* ImmobilizeAction;
+
 public:
 	Ablackmyth_wukongCharacter();
 
@@ -218,6 +222,10 @@ protected:
 	// [新增] 自动生成导航网格
 	void SpawnDynamicNavMesh();
 
+	/** 定身术具体的触发函数 */
+	void Immobilize(const FInputActionValue& Value);
+	void CastImmobilizeSkill();
+
 	// 辅助函数
 	void ResetCombo();
 	void ResetDodgeState();
@@ -242,6 +250,10 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Combat|Skill")
 	float GetSkillCooldownFraction() const;
+
+	/** 获取冷却进度 (0.0 = 刚用完, 1.0 = 冷却完毕) */
+	UFUNCTION(BlueprintPure, Category = "Skills|UI")
+	float GetImmobilizeCooldownPercent() const;
 
 	FORCEINLINE class USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
 	FORCEINLINE class UCameraComponent* GetFollowCamera() const { return FollowCamera; }
@@ -273,4 +285,21 @@ private:
 	UAnimMontage* CurrentIdleMontage;
 	UPROPERTY()
 	UAnimMontage* CurrentSkillMontage;
+
+
+protected:
+	// 定身术的最大距离
+	UPROPERTY(EditAnywhere, Category = "Skills")
+	float ImmobilizeRange = 1000.0f;
+
+	// 定身术持续时间
+	UPROPERTY(EditAnywhere, Category = "Skills")
+	float ImmobilizeDuration = 3.0f;
+
+	/** 定身术冷却时间 (秒) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skills")
+	float ImmobilizeCooldownTime = 10.0f;
+
+	/** 冷却定时器句柄 */
+	FTimerHandle TimerHandle_ImmobilizeCooldown;
 };

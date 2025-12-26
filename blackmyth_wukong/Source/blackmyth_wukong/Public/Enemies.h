@@ -6,6 +6,7 @@
 #include "GameFramework/Character.h"
 #include "Components/WidgetComponent.h"
 #include "EnemyHealthBar.h"
+#include "ImmobilizableInterface.h"
 #include "Enemies.generated.h"
 
 
@@ -13,7 +14,7 @@ class UBoxComponent;
 class ASparrowProjectile;
 
 UCLASS()
-class BLACKMYTH_WUKONG_API AEnemies : public ACharacter
+class BLACKMYTH_WUKONG_API AEnemies : public ACharacter, public IImmobilizableInterface
 {
     GENERATED_BODY()
 
@@ -23,6 +24,10 @@ public:
 
     // 重写系统的受击函数，处理扣血逻辑
     virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
+
+    // 定身接口实现
+    virtual void OnImmobilized_Implementation(float Duration);
+    virtual void OnUnImmobilized_Implementation();
 
 protected:
     // 开始游戏时调用
@@ -58,6 +63,17 @@ protected:
     // 3. 记录单次挥刀已击中的敌人（防止一刀多判）
     UPROPERTY()
     TArray<AActor*> HitActors;
+
+
+    // 用于计时自动解除定身
+    FTimerHandle TimerHandle_Immobilize;
+
+    // 处理定身结束的回调
+    void HandleImmobilizeTimeout();
+
+    // 蓝图事件，用来播放材质特效
+    UFUNCTION(BlueprintImplementableEvent)
+    void BP_OnImmobilizeVisuals(bool bStart);
 
 public:
     // 4. 开启武器碰撞（给动画通知调用）
@@ -138,6 +154,9 @@ protected:
     // UI 组件
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "UI")
     UWidgetComponent* HealthBarWidgetComp;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI")
+    UWidgetComponent* ImmobilizeIconWidget;
 
     // 更新血条的辅助函数
     void UpdateHealthUI();
