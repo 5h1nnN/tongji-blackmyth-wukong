@@ -183,7 +183,7 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "RPG System")
 	float CurrentXP;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "RPG System")
-	float MaxXP;
+	float MaxXP=100;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
 	float BaseAttackPower;
 
@@ -194,7 +194,12 @@ public:
 	float GetTotalAttackPower() const;
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
 	virtual void Die();
-
+	UFUNCTION(BlueprintCallable, Category = "RPG System")
+	void AddXP(float Amount);
+	UFUNCTION(BlueprintImplementableEvent, Category = "RPG System")
+	void LevelUp();
+	UFUNCTION(BlueprintCallable, Category = "RPG System")
+	void AddHealth(float Amount);
 protected:
 	virtual void BeginPlay();
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
@@ -225,9 +230,8 @@ protected:
 	void ResetSkillCooldown();
 	void ResetHitReactState();
 	void CheckAttackHit(float CurrentRange);
+	UFUNCTION(BlueprintCallable, Category = "RPG System")
 	void CheckLevelUp();
-	UFUNCTION(BlueprintImplementableEvent, Category = "RPG System")
-	void OnLevelUp();
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation|Idle")
 	float IdleWaitTime;
