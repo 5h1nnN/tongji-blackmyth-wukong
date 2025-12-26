@@ -211,6 +211,39 @@ void Ablackmyth_wukongCharacter::SetupPlayerInputComponent(UInputComponent* Play
 	}
 }
 
+void Ablackmyth_wukongCharacter::AddHealth(float Amount)
+{
+	CurrentHealth += Amount;
+
+	// 可以在这里加个简单的限制，比如不超过100
+	if (CurrentHealth > MaxHealth)
+	{
+		CurrentHealth = MaxHealth;
+	}
+
+}
+
+void Ablackmyth_wukongCharacter::AddXP(float Amount)
+{
+	// 1. 增加经验
+	CurrentXP += Amount;
+	CheckLevelUp();
+}
+
+void Ablackmyth_wukongCharacter::CheckLevelUp()
+{
+	while (CurrentXP >= MaxXP)
+	{
+		CurrentXP -= MaxXP;
+		CharacterLevel++;
+		MaxHealth += 20.0f;
+		BaseAttackPower += 5.0f;
+		MaxXP = MaxXP * 1.5f;
+		CurrentHealth = MaxHealth;
+		LevelUp();
+	}
+}
+
 // =================================================================
 // [核心逻辑] 分身术实现
 // =================================================================
@@ -646,7 +679,6 @@ void Ablackmyth_wukongCharacter::StopSprinting() { bIsSprinting = false; GetChar
 void Ablackmyth_wukongCharacter::Tick(float DeltaTime) { Super::Tick(DeltaTime); if (bIsDead || bIsHitReacting || !IdleAnimSequence) return; double CurrentTime = GetWorld()->GetTimeSeconds(); bool bIsMoving = GetVelocity().SizeSquared() > 10.0f; if (bIsMoving || GetCharacterMovement()->IsFalling()) { LastInputTime = CurrentTime; return; } if ((CurrentTime - LastInputTime) > IdleWaitTime) { UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance(); if (AnimInstance && !AnimInstance->IsAnyMontagePlaying()) { CurrentIdleMontage = AnimInstance->PlaySlotAnimationAsDynamicMontage(IdleAnimSequence, FName("DefaultSlot"), 0.25f, 0.25f, 1.0f, 1); } } }
 void Ablackmyth_wukongCharacter::ResetIdleTimer() { if (GetWorld()) LastInputTime = GetWorld()->GetTimeSeconds(); UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance(); if (AnimInstance && CurrentIdleMontage) { if (AnimInstance->Montage_IsPlaying(CurrentIdleMontage)) { AnimInstance->Montage_Stop(0.25f, CurrentIdleMontage); } CurrentIdleMontage = nullptr; } }
 void Ablackmyth_wukongCharacter::GainExperience(float Amount) { if (bIsDead) return; CurrentXP += Amount; CheckLevelUp(); }
-void Ablackmyth_wukongCharacter::CheckLevelUp() { while (CurrentXP >= MaxXP) { CurrentXP -= MaxXP; CharacterLevel++; MaxHealth += 20.0f; BaseAttackPower += 5.0f; MaxXP = MaxXP * 1.5f; CurrentHealth = MaxHealth; OnLevelUp(); } }
 float Ablackmyth_wukongCharacter::GetTotalAttackPower() const { return BaseAttackPower; }
 void Ablackmyth_wukongCharacter::ResumeGameFromUI()
 {
