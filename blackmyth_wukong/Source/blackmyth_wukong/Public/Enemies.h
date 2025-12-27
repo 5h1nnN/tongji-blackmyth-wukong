@@ -79,11 +79,11 @@ public:
     // 4. 开启武器碰撞（给动画通知调用）
     // bEnableLeft: 是否开启左手, bEnableRight: 是否开启右手
     UFUNCTION(BlueprintCallable, Category = "Combat")
-    void EnableWeaponCollision(bool bEnableLeft, bool bEnableRight);
+    virtual void EnableWeaponCollision(bool bEnableLeft, bool bEnableRight);
 
     // 5. 关闭武器碰撞（给动画通知调用）
     UFUNCTION(BlueprintCallable, Category = "Combat")
-    void DisableWeaponCollision();
+    virtual void DisableWeaponCollision();
 
     // 6. 重叠判定函数（必须加 UFUNCTION 宏）
     UFUNCTION()
@@ -102,7 +102,7 @@ protected:
     bool bIsDead = false;
 
     // 处理死亡的函数
-    void HandleDeath();
+    virtual void HandleDeath();
 
 public:
     // 获取是否死亡 (给 AI 控制器用)
@@ -159,7 +159,7 @@ protected:
     UWidgetComponent* ImmobilizeIconWidget;
 
     // 更新血条的辅助函数
-    void UpdateHealthUI();
+    virtual void UpdateHealthUI();
 
 public:
     // 每一帧调用
