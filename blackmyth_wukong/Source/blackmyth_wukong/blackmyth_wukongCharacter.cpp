@@ -105,7 +105,9 @@ void Ablackmyth_wukongCharacter::BeginPlay()
 
 		// 3. 隐藏鼠标光标
 		PlayerController->bShowMouseCursor = false;
-
+		// 把输入模式切回游戏（允许键盘移动）
+		FInputModeGameOnly InputMode;
+		PlayerController->SetInputMode(InputMode);
 		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
 		{
 			Subsystem->ClearAllMappings();

@@ -7,6 +7,7 @@
 #include "BrainComponent.h"
 #include "Particles/ParticleSystemComponent.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
+#include "Blueprint/UserWidget.h" 
 
 AEnemyBoss::AEnemyBoss()
 {
@@ -46,6 +47,32 @@ void AEnemyBoss::BeginPlay()
     if (WeaponCollisionStaff)
     {
         WeaponCollisionStaff->OnComponentBeginOverlap.AddDynamic(this, &AEnemyBoss::OnStaffOverlap);
+    }
+
+    // 1. 隐藏父类自带的头顶血条组件
+    if (HealthBarWidgetComp)
+    {
+        HealthBarWidgetComp->SetVisibility(false);
+    }
+
+    // 2. 创建屏幕 HUD (使用新的子类)
+    if (BossHUDClass && !bIsClone)
+    {
+        // 创建 Widget
+        BossHUDInstance = CreateWidget<UBossHealthBar>(GetWorld(), BossHUDClass);
+
+        if (BossHUDInstance)
+        {
+            // [关键] 添加到视口 (屏幕上方)
+            BossHUDInstance->AddToViewport(10); // ZOrder设高一点，防止被遮挡
+
+            // 初始化数据
+            // 1. 复用父类方法更新血条
+            BossHUDInstance->UpdateHealthPercent(Health / MaxHealth);
+
+            // 2. 使用子类新方法设置名字
+            BossHUDInstance->SetBossName(EnemyName);
+        }
     }
 }
 
@@ -100,6 +127,10 @@ void AEnemyBoss::EnterPhaseTwo()
             FRotator::ZeroRotator,
             EAttachLocation::SnapToTarget
         );
+        if (ActiveInvincibilityFXComp)
+        {
+            ActiveInvincibilityFXComp->CustomTimeDilation = 0.4f;
+        }
     }
 
     // 1. 播放转阶段动画
@@ -169,6 +200,10 @@ void AEnemyBoss::SummonClones(int32 NumClones)
 
     FVector MyLoc = GetActorLocation();
 
+    // 清理一下数组，移除掉之前可能已经自然死亡或被销毁的分身 (空指针)
+    // 这一步不是必须的，但能保持数组干净
+    ActiveMinions.RemoveAll([](AEnemies* Ptr) { return Ptr == nullptr || Ptr->IsDead(); });
+
     for (int32 i = 0; i < NumClones; i++)
     {
         // 计算分身生成位置
@@ -187,15 +222,54 @@ void AEnemyBoss::SummonClones(int32 NumClones)
             AEnemyBoss* BossClone = Cast<AEnemyBoss>(Clone);
             BossClone->bIsClone = true;
 
+
+            if (BossClone->BossHUDInstance)
+            {
+                BossClone->BossHUDInstance->RemoveFromParent(); // 从屏幕移除
+                BossClone->BossHUDInstance = nullptr;           // 清空指针
+            }
+
+            if (BossClone->HealthBarWidgetComp)
+            {
+                BossClone->HealthBarWidgetComp->SetVisibility(false);
+                // 彻底停用组件，防止它在后台 tick 浪费性能
+                BossClone->HealthBarWidgetComp->Deactivate();
+            }
+
             // 可以削弱分身血量
             BossClone->MaxHealth = MaxHealth * 0.1f;
             BossClone->BaseDamage = BaseDamage * 0.5f;
             BossClone->HealthBarWidgetComp->SetVisibility(false);
 
+            ActiveMinions.Add(Clone);
+
             // 给分身生成特效
             UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), nullptr, SpawnLoc); // 这里填入烟雾特效
         }
     }
+}
+
+
+// 重写开启逻辑
+void AEnemyBoss::EnableWeaponCollision(bool bEnableLeft, bool bEnableRight)
+{
+    // 逻辑映射：
+    // 只要 Notify 想要开启左手 或 右手 (通常攻击蒙太奇都会勾选其中一个)
+    // 我们就开启金箍棒
+    if (bEnableLeft || bEnableRight)
+    {
+        SetStaffCollision(true);
+    }
+}
+
+// 重写关闭逻辑
+void AEnemyBoss::DisableWeaponCollision()
+{
+    // 调用父类是为了保险 (虽然 Boss 没有左右手碰撞盒，但调用一下无妨)
+    AEnemies::DisableWeaponCollision();
+
+    // 关闭金箍棒
+    SetStaffCollision(false);
 }
 
 void AEnemyBoss::SetStaffCollision(bool bActive)
@@ -281,4 +355,64 @@ void AEnemyBoss::SpawnPhaseTwoMinions()
 
     // 生成 2 个分身
     SummonClones(2);
+}
+
+void AEnemyBoss::HandleDeath()
+{
+    // 移除屏幕 HUD
+    if (BossHUDInstance)
+    {
+        BossHUDInstance->RemoveFromParent();
+        BossHUDInstance = nullptr;
+    }
+
+    // 1. 如果我是本体，就处死所有分身
+    if (!bIsClone)
+    {
+        KillAllMinions();
+    }
+
+    // 2. [关键] 必须调用父类的逻辑，执行原本的死亡动画、碰撞关闭等
+    AEnemies::HandleDeath();
+}
+
+void AEnemyBoss::KillAllMinions()
+{
+    // 遍历所有记录的分身
+    for (AEnemies* Minion : ActiveMinions)
+    {
+        // 检查指针是否有效，且分身还没死
+        if (Minion && !Minion->IsDead())
+        {
+            // 方法一：直接造成巨额伤害 (推荐)
+            // 这样做的好处是会触发分身自己的 TakeDamage -> HandleDeath 流程
+            // 分身会播放死亡动画，而不是突然消失
+            UGameplayStatics::ApplyDamage(
+                Minion,
+                99999.f,             // 巨额伤害
+                GetController(),     // 凶手是本体的控制器
+                this,                // 凶手是本体
+                UDamageType::StaticClass()
+            );
+
+            // 方法二：如果你想让分身直接消失，不播动画
+            // Minion->Destroy();
+        }
+    }
+
+    // 清空列表
+    ActiveMinions.Empty();
+}
+
+void AEnemyBoss::UpdateHealthUI()
+{
+    if (bIsClone) return;
+
+    // 重写父类逻辑：只更新屏幕上的 HUD
+    if (BossHUDInstance)
+    {
+        float Percent = Health / MaxHealth;
+        // 调用继承自父类的方法
+        BossHUDInstance->UpdateHealthPercent(Percent);
+    }
 }
