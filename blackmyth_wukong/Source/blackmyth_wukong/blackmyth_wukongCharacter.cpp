@@ -412,7 +412,7 @@ void Ablackmyth_wukongCharacter::PerformHeavyAttack(const FInputActionValue& Val
 		AnimInstance->StopAllMontages(0.2f);
 		AnimInstance->Montage_Play(HeavyAttackMontage);
 		FTimerHandle HitCheckTimer;
-		GetWorldTimerManager().SetTimer(HitCheckTimer, [this]() { CheckAttackHit(150.0f); }, 0.4f, false);
+		GetWorldTimerManager().SetTimer(HitCheckTimer, [this]() { CheckAttackHit(150.0f, 1.5f); }, 0.4f, false);
 		ResetCombo();
 	}
 }
@@ -467,7 +467,7 @@ void Ablackmyth_wukongCharacter::PerformSpecialSkill(const FInputActionValue& Va
 		ResetCombo();
 		bIsAttacking = true;
 		FTimerHandle HitCheckTimer;
-		GetWorldTimerManager().SetTimer(HitCheckTimer, [this]() { CheckAttackHit(400.0f); }, 0.3f, false);
+		GetWorldTimerManager().SetTimer(HitCheckTimer, [this]() { CheckAttackHit(400.0f, 3.3f); }, 0.3f, false);
 		float AnimLength = SpecialSkillAnimSequence->GetPlayLength();
 		FTimerHandle SkillAnimTimer;
 		GetWorldTimerManager().SetTimer(SkillAnimTimer, [this]()
@@ -504,7 +504,7 @@ float Ablackmyth_wukongCharacter::GetSkillCooldownFraction() const
 	return 0.0f;
 }
 
-void Ablackmyth_wukongCharacter::CheckAttackHit(float CurrentRange)
+void Ablackmyth_wukongCharacter::CheckAttackHit(float CurrentRange, float DamageMultiplier)
 {
 	if (bIsDead) return;
 	FVector Start = GetActorLocation();
@@ -537,7 +537,9 @@ void Ablackmyth_wukongCharacter::CheckAttackHit(float CurrentRange)
 			if (HitActor && !HitActors.Contains(HitActor))
 			{
 				HitActors.Add(HitActor);
-				UGameplayStatics::ApplyDamage(HitActor, GetTotalAttackPower(), GetController(), this, UDamageType::StaticClass());
+				// 计算最终伤害：基础攻击力 * 倍率
+				float FinalDamage = GetTotalAttackPower() * DamageMultiplier;
+				UGameplayStatics::ApplyDamage(HitActor, FinalDamage, GetController(), this, UDamageType::StaticClass());
 			}
 		}
 	}
