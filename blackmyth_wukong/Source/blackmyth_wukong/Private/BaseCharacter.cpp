@@ -1,76 +1,40 @@
-#include "FeyCharacter.h"
 #include "BaseCharacter.h"
+#include "FeyCharacter.h" // 如果变身逻辑需要识别 Fey
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
+#include "InputMappingContext.h"
 #include "NiagaraFunctionLibrary.h"
 #include "Kismet/GameplayStatics.h"
+#include "Kismet/KismetSystemLibrary.h" // 必须包含：用于 QuitGame
+#include "Blueprint/UserWidget.h"
+#include "GameFramework/PlayerController.h"
 
 ABaseCharacter::ABaseCharacter()
 {
 	PrimaryActorTick.bCanEverTick = false;
+	MaxHealth = 100.0f;
+	CurrentHealth = MaxHealth;
+	bIsCooldown = false;
+	TransformCooldownDuration = 30.0f; // 默认冷却时间，可在蓝图调整
 }
 
-void ABaseCharacter::TransformCharacter()
+void ABaseCharacter::BeginPlay()
 {
-	// 如果正在冷却，不允许变身
-	if (bIsCooldown)
+	Super::BeginPlay();
+
+	// --- 输入映射绑定 ---
+	if (APlayerController* PlayerController = Cast<APlayerController>(Controller))
 	{
-		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Red, TEXT("技能冷却中..."));
-		return;
-	}
-
-	if (!TargetCharacterClass) return;
-
-	UWorld* World = GetWorld();
-	if (World)
-	{
-		// 1. 获取当前位置和旋转
-		FVector Location = GetActorLocation();
-		FRotator Rotation = GetActorRotation();
-		FTransform SpawnTransform = GetActorTransform();
-
-		// 2. 播放特效 (需要包含 Niagara 模块)
-		if (TransformationVFX)
+		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
 		{
-			UNiagaraFunctionLibrary::SpawnSystemAtLocation(World, TransformationVFX, Location);
-		}
-
-		// 3. 生成新角色
-		FActorSpawnParameters SpawnParams;
-		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
-		ABaseCharacter* NewCharacter = World->SpawnActor<ABaseCharacter>(TargetCharacterClass, SpawnTransform, SpawnParams);
-
-		if (NewCharacter)
-		{
-			NewCharacter->CurrentHealth = this->CurrentHealth; // 或者设置为某个固定值
-			// 如果是从 Fey 变回 Wukong (即当前是 Fey)
-			// 我们让新生成的 Wukong 进入冷却
-			AFeyCharacter* IsFey = Cast<AFeyCharacter>(this);
-			if (IsFey)
+			// 确保添加默认的 Context (包含变身、暂停等基础功能)
+			if (DefaultMappingContext)
 			{
-				NewCharacter->StartTransformCooldown();
+				Subsystem->AddMappingContext(DefaultMappingContext, 0);
 			}
-			// 4. 转移控制器 (Possess)
-			AController* CurrController = GetController();
-			APlayerController* PC = Cast<APlayerController>(CurrController);
-			if (PC)
-			{
-				// 让相机平滑混合 0.2 秒
-				PC->SetViewTargetWithBlend(NewCharacter, 0.2f);
-			}
-			CurrController->Possess(NewCharacter);
-			if (CurrController)
-			{
-				CurrController->Possess(NewCharacter);
-			}
-
-			// 5. 销毁旧角色
-			Destroy();
 		}
 	}
 }
-
 
 void ABaseCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
@@ -78,34 +42,185 @@ void ABaseCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 
 	if (UEnhancedInputComponent* EnhancedInputComponent = CastChecked<UEnhancedInputComponent>(PlayerInputComponent))
 	{
-		EnhancedInputComponent->BindAction(TransformAction, ETriggerEvent::Started, this, &ABaseCharacter::TransformCharacter);
+		// 绑定变身
+		if (TransformAction)
+		{
+			EnhancedInputComponent->BindAction(TransformAction, ETriggerEvent::Started, this, &ABaseCharacter::TransformCharacter);
+		}
+
+		// 绑定暂停
+		if (PauseAction)
+		{
+			EnhancedInputComponent->BindAction(PauseAction, ETriggerEvent::Started, this, &ABaseCharacter::TogglePause);
+		}
+	}
+}
+
+// ============================================================================
+//                              暂停与 UI 系统 (核心修复)
+// ============================================================================
+
+void ABaseCharacter::TogglePause(const FInputActionValue& Value)
+{
+	APlayerController* PC = Cast<APlayerController>(GetController());
+
+	if (PC && PauseMenuWidgetClass)
+	{
+		// 检查当前是否已经暂停
+		if (UGameplayStatics::IsGamePaused(GetWorld()))
+		{
+			// --- 恢复游戏 ---
+			ResumeGameFromUI();
+		}
+		else
+		{
+			// --- 暂停游戏 ---
+			UGameplayStatics::SetGamePaused(GetWorld(), true);
+
+			// 创建 UI 实例（如果不存在）
+			if (!PauseMenuInstance)
+			{
+				PauseMenuInstance = CreateWidget<UUserWidget>(GetWorld(), PauseMenuWidgetClass);
+			}
+
+			// 显示 UI 并切换输入模式
+			if (PauseMenuInstance)
+			{
+				PauseMenuInstance->AddToViewport();
+
+				// [关键修复] 使用 FInputModeGameAndUI 并设置焦点
+				FInputModeGameAndUI InputMode;
+				InputMode.SetWidgetToFocus(PauseMenuInstance->TakeWidget()); // 让 UI 立即获得焦点
+				InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+
+				PC->SetInputMode(InputMode);
+				PC->bShowMouseCursor = true;
+			}
+		}
+	}
+}
+
+void ABaseCharacter::ResumeGameFromUI()
+{
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC) return;
+
+	// 解除暂停状态
+	UGameplayStatics::SetGamePaused(GetWorld(), false);
+
+	// 隐藏 UI
+	if (PauseMenuInstance)
+	{
+		PauseMenuInstance->RemoveFromParent();
+		// 注意：如果不销毁实例，下次打开会保留上次的状态。
+		// 如果希望每次打开都是新的，可以添加 PauseMenuInstance = nullptr;
+	}
+
+	// 恢复输入模式为纯游戏
+	PC->bShowMouseCursor = false;
+	FInputModeGameOnly GameInputMode;
+	PC->SetInputMode(GameInputMode);
+}
+
+void ABaseCharacter::RestartLevel()
+{
+	// [必须] 在重新加载关卡前解除暂停，否则新关卡可能卡住
+	UGameplayStatics::SetGamePaused(GetWorld(), false);
+
+	FString CurrentLevelName = UGameplayStatics::GetCurrentLevelName(GetWorld());
+	UGameplayStatics::OpenLevel(this, FName(*CurrentLevelName));
+}
+
+void ABaseCharacter::QuitGame()
+{
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (PC)
+	{
+		UKismetSystemLibrary::QuitGame(GetWorld(), PC, EQuitPreference::Quit, true);
+	}
+}
+
+// ============================================================================
+//                                 变身系统
+// ============================================================================
+
+void ABaseCharacter::TransformCharacter()
+{
+	if (bIsCooldown) return;
+	if (!TargetCharacterClass) return;
+
+	UWorld* World = GetWorld();
+	if (World)
+	{
+		FVector Location = GetActorLocation();
+		FTransform SpawnTransform = GetActorTransform();
+
+		// 播放特效
+		if (TransformationVFX)
+		{
+			UNiagaraFunctionLibrary::SpawnSystemAtLocation(World, TransformationVFX, Location);
+		}
+
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+		// 生成新角色
+		ABaseCharacter* NewCharacter = World->SpawnActor<ABaseCharacter>(TargetCharacterClass, SpawnTransform, SpawnParams);
+
+		if (NewCharacter)
+		{
+			// 继承血量
+			NewCharacter->CurrentHealth = this->CurrentHealth;
+
+			// 如果当前是 Fey (从 Fey 变回 Wukong)，或者新的是 Fey，
+			// 根据你的逻辑，这里可能需要触发冷却。
+			// 假设逻辑是：只要使用了变身功能，就进入冷却。
+			AFeyCharacter* CurrentIsFey = Cast<AFeyCharacter>(this);
+
+			// 控制权移交
+			AController* CurrController = GetController();
+			APlayerController* PC = Cast<APlayerController>(CurrController);
+
+			if (PC)
+			{
+				PC->SetViewTargetWithBlend(NewCharacter, 0.2f);
+			}
+
+			if (CurrController)
+			{
+				CurrController->Possess(NewCharacter);
+			}
+
+			// 如果是从 Fey 变回 Wukong (或者反过来)，在新角色身上启动冷却逻辑
+			// 这里假设是 NewCharacter 需要继承或启动冷却管理
+			if (CurrentIsFey)
+			{
+				NewCharacter->StartTransformCooldown();
+			}
+
+			// 销毁旧角色
+			Destroy();
+		}
 	}
 }
 
 void ABaseCharacter::StartTransformCooldown()
 {
 	bIsCooldown = true;
-
-	GetWorldTimerManager().SetTimer(
-		CooldownTimerHandle,
-		this,
-		&ABaseCharacter::OnCooldownFinished,
-		TransformCooldownDuration,
-		false
-	);
+	GetWorldTimerManager().SetTimer(CooldownTimerHandle, this, &ABaseCharacter::OnCooldownFinished, TransformCooldownDuration, false);
 }
 
 void ABaseCharacter::OnCooldownFinished()
 {
 	bIsCooldown = false;
+	GetWorldTimerManager().ClearTimer(CooldownTimerHandle);
 }
 
 float ABaseCharacter::GetCooldownPercent() const
 {
 	if (bIsCooldown && GetWorldTimerManager().IsTimerActive(CooldownTimerHandle))
 	{
-		float Remaining = GetWorldTimerManager().GetTimerRemaining(CooldownTimerHandle);
-		return FMath::Clamp(Remaining / TransformCooldownDuration, 0.0f, 1.0f);
+		return FMath::Clamp(GetWorldTimerManager().GetTimerRemaining(CooldownTimerHandle) / TransformCooldownDuration, 0.0f, 1.0f);
 	}
 	return 0.0f;
 }
