@@ -2,9 +2,14 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "InputActionValue.h"
 #include "BaseCharacter.generated.h"
 
 class AFeyCharacter;
+class UUserWidget;
+class UInputAction;
+class UNiagaraSystem;
+class UInputMappingContext; // 前置声明
 
 UCLASS()
 class BLACKMYTH_WUKONG_API ABaseCharacter : public ACharacter
@@ -13,6 +18,7 @@ class BLACKMYTH_WUKONG_API ABaseCharacter : public ACharacter
 
 public:
 	ABaseCharacter();
+
 	// --- 战斗参数配置 ---
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
 	float MaxHealth;
@@ -20,43 +26,70 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Health")
 	float CurrentHealth;
 
-	// 在蓝图中指定要变身的目标类
+	// --- 变身系统 ---
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Transformation")
 	TSubclassOf<ABaseCharacter> TargetCharacterClass;
 
-	// 变身特效 (Niagara 或 粒子)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Transformation")
-	class UNiagaraSystem* TransformationVFX;
+	UNiagaraSystem* TransformationVFX;
 
-	// 变身核心函数
 	UFUNCTION(BlueprintCallable, Category = "Transformation")
 	void TransformCharacter();
 
-	/** 冷却总时长 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Transformation")
 	float TransformCooldownDuration = 30.0f;
 
-	/** 是否处于冷却中 */
 	UPROPERTY(BlueprintReadOnly, Category = "Transformation")
 	bool bIsCooldown = false;
 
-	/** 启动冷却计时 */
 	void StartTransformCooldown();
-
-	/** 冷却结束的回调 */
 	void OnCooldownFinished();
 
-	/** 获取剩余冷却百分比 (给UI用, 0.0 - 1.0) */
 	UFUNCTION(BlueprintCallable, Category = "Transformation")
 	float GetCooldownPercent() const;
 
 	FTimerHandle CooldownTimerHandle;
 
-protected:
+	// --- UI 与 暂停系统 ---
 
-	// 增强输入相关
+	/** 暂停菜单的 Widget 类 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
+	TSubclassOf<UUserWidget> PauseMenuWidgetClass;
+
+	/** 保存暂停菜单实例引用 */
+	UPROPERTY()
+	UUserWidget* PauseMenuInstance;
+
+	/** 提供给 UI 蓝图调用的恢复游戏函数 */
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void ResumeGameFromUI();
+
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void RestartLevel();
+
+	/** [新增] 用于在 UI 中绑定的退出游戏 */
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void QuitGame();
+
+protected:
+	virtual void BeginPlay() override;
+
+	// --- 增强输入相关 (移动至此，供所有子类使用) ---
+
+	/** 默认输入映射上下文 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
-	class UInputAction* TransformAction;
+	UInputMappingContext* DefaultMappingContext;
+
+	/** 变身按键 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* TransformAction;
+
+	/** 暂停按键 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* PauseAction;
 
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+
+	/** 暂停逻辑处理函数 */
+	void TogglePause(const FInputActionValue& Value);
 };

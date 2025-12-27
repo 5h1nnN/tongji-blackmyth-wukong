@@ -1,8 +1,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "BaseCharacter.h" // 保持继承关系
-#include "InputActionValue.h" // 必须包含
+#include "BaseCharacter.h" // 继承自 BaseCharacter
+#include "InputActionValue.h"
 #include "FeyCharacter.generated.h"
 
 // 前向声明
@@ -11,10 +11,7 @@ class UCameraComponent;
 class UInputMappingContext;
 class UInputAction;
 class UAnimMontage;
-class UAnimSequence;
-class UUserWidget; // [新增] 必须声明，否则识别不了 UI 类
 class ABaseProjectile;
-struct FInputActionValue;
 
 UCLASS()
 class BLACKMYTH_WUKONG_API AFeyCharacter : public ABaseCharacter
@@ -29,41 +26,39 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+
 	/** 自动变回原型的时间（秒） */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Transformation")
 	float AutoTransformDuration = 10.0f;
 
-	/** 定时器句柄 */
 	FTimerHandle TransformTimerHandle;
-
-	/** 定时器到期后执行的包装函数 */
 	void OnAutoTransformTimerTimeout();
-	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
-	/** Camera boom positioning the camera behind the character */
+	/** 摄像机组件 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
 	USpringArmComponent* CameraBoom;
 
-	/** Follow camera */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
 	UCameraComponent* FollowCamera;
 
-
-	/** --- 增强输入资源 --- */
+	/** --- Fey 特有的增强输入 --- */
+	// 注意：父类已经有一个 DefaultMappingContext，这里我们定义 Fey 专用的
+	// 如果你想让 Fey 使用完全不同的按键，可以在这里配置
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
-	class UInputMappingContext* FeyMappingContext;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
-	class UInputAction* MoveAction;
+	UInputMappingContext* FeyMappingContext;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
-	class UInputAction* LookAction;
+	UInputAction* MoveAction;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
-	class UInputAction* JumpAction;
+	UInputAction* LookAction;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
-	class UInputAction* AttackAction;
+	UInputAction* JumpAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* AttackAction;
 
 	/** 飞行物蓝图类 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat")
@@ -73,11 +68,9 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
 	class UAnimMontage* AttackMontage;
 
-	/** 攻击函数 */
 	void Attack();
-	/** --- 输入处理函数 --- */
+
+	// 输入回调
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
-
-
 };

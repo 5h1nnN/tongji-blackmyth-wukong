@@ -212,7 +212,7 @@ void AEnemies::HandleDeath()
     {
         PlayAnimMontage(DeathMontage);
     }
-
+    SpawnLoot();
     // 若干秒后销毁尸体
     SetLifeSpan(2.0f);
 }
@@ -500,5 +500,30 @@ void AEnemies::OnUnImmobilized_Implementation()
     if (ImmobilizeIconWidget)
     {
         ImmobilizeIconWidget->SetVisibility(false);
+    }
+}
+void AEnemies::SpawnLoot()
+{
+    // 1. 如果列表为空，直接返回
+    if (LootDropList.Num() == 0) return;
+
+    // 2. 随机选取一个物品索引
+    int32 RandomIndex = FMath::RandRange(0, LootDropList.Num() - 1);
+    TSubclassOf<ABaseFood> ItemClassToSpawn = LootDropList[RandomIndex];
+
+    if (ItemClassToSpawn)
+    {
+        // 3. 设定生成位置 (在敌人位置稍微向上抬高一点，防止卡地里)
+        FVector SpawnLocation = GetActorLocation() + FVector(0.f, 0.f, 50.f);
+        FRotator SpawnRotation = GetActorRotation(); // 或者使用 FRotator::ZeroRotator
+
+        // 4. 生成参数：强制生成，即使碰撞重叠
+        FActorSpawnParameters SpawnParams;
+        SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+        SpawnParams.Owner = this;
+
+        // 5. 生成 Actor
+        GetWorld()->SpawnActor<ABaseFood>(ItemClassToSpawn, SpawnLocation, SpawnRotation, SpawnParams);
+
     }
 }

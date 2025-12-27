@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "BaseCharacter.h" // 确保这是你的父类头文件
+#include "BaseCharacter.h" // 确保包含父类头文件
 #include "Logging/LogMacros.h"
 #include "blackmyth_wukongCharacter.generated.h"
 
@@ -31,26 +31,21 @@ class Ablackmyth_wukongCharacter : public ABaseCharacter
 	UCameraComponent* FollowCamera;
 
 	/** MappingContext */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
-	UInputMappingContext* DefaultMappingContext;
+	//UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	//UInputMappingContext* DefaultMappingContext;
 
-	/** Jump Input Action */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* JumpAction;
 
-	/** Move Input Action */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* MoveAction;
 
-	/** Look Input Action */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* LookAction;
 
-	// [新增] 分身术输入动作
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* CloneAction;
 
-	// --- 基础攻击/动作 ---
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* SprintAction;
 
@@ -63,79 +58,58 @@ class Ablackmyth_wukongCharacter : public ABaseCharacter
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* DodgeAction;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
-	UInputAction* PauseAction;
+	// [已删除] PauseAction (已移至 BaseCharacter)
+	// UInputAction* PauseAction; 
 
-	// [新增] 特殊技能动作
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* SpecialSkillAction;
 
-	/** 定身术输入操作 (IA_Immobilize) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* ImmobilizeAction;
 
 public:
 	Ablackmyth_wukongCharacter();
 
-	UFUNCTION(BlueprintCallable, Category = "UI")
-	void ResumeGameFromUI();
+	// [已删除] ResumeGameFromUI (已移至 BaseCharacter，且无需重写)
+	// void ResumeGameFromUI();
 
 	void PerformLightAttack(const FInputActionValue& Value);
 	void PerformHeavyAttack(const FInputActionValue& Value);
 	void PerformDodge(const FInputActionValue& Value);
 	void PerformSpecialSkill(const FInputActionValue& Value);
 
-	// =================================================================
-	// [新增] 自动导航网格生成参数
-	// =================================================================
-
-	/** 是否在开始时自动生成 NavMeshBoundsVolume */
+	// --- 导航与分身系统参数 ---
 	UPROPERTY(EditAnywhere, Category = "AI|Navigation")
 	bool bAutoSpawnNavMesh = true;
 
-	/** 自动生成的导航网格覆盖半径 (长宽高的一半) */
 	UPROPERTY(EditAnywhere, Category = "AI|Navigation")
 	FVector NavMeshExtent = FVector(5000.0f, 5000.0f, 1000.0f);
 
-	// =================================================================
-	// [新增] 分身术系统参数
-	// =================================================================
-
-	/** 分身使用的蓝图类 (建议创建 BP_Wukong_Clone) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Clone")
 	TSubclassOf<ACharacter> CloneClass;
 
-	/** 分身数量 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Clone")
 	int32 CloneCount = 3;
 
-	/** 生成半径 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Clone")
 	float CloneSpawnRadius = 300.0f;
 
-	/** 分身存活时间 (秒) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Clone")
 	float CloneLifeSpan = 15.0f;
 
-	/** 技能冷却时间 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Clone")
 	float CloneSkillCooldown = 30.0f;
 
-	/** 分身冷却状态 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat|Clone")
 	bool bIsCloneSkillCooldown = false;
 
-	/** 召唤动作 Montage */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Clone")
 	UAnimMontage* CloneSummonMontage;
 
-	/** 生成特效 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Clone")
 	class UParticleSystem* CloneSpawnFX;
 
-	// =================================================================
-	// 其他现有参数 (保持不变)
-	// =================================================================
+	// --- 动画与战斗参数 ---
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Animation)
 	TArray<UAnimMontage*> LightAttackMontages;
 
@@ -161,81 +135,89 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
 	float DodgeStrength;
 
-	// 技能参数
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Skill")
 	float SkillCooldownTime;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat|Skill")
 	bool bIsSkillOnCooldown;
 
-	// UI 类
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
-	TSubclassOf<class UUserWidget> PauseMenuWidgetClass;
+	// --- UI 系统 ---
+	// [已删除] PauseMenuWidgetClass (已移至 BaseCharacter)
+	// TSubclassOf<class UUserWidget> PauseMenuWidgetClass;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
 	TSubclassOf<class UUserWidget> GameOverWidgetClass;
-	UPROPERTY()
-	UUserWidget* PauseMenuInstance;
 
-	// 移动参数
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
+	TSubclassOf<class UUserWidget> HUDWidgetClass;
+
+	// [已删除] PauseMenuInstance (已移至 BaseCharacter)
+	// UUserWidget* PauseMenuInstance;
+
+	// [新增] 保存 HUD 实例
+	UPROPERTY()
+	UUserWidget* HUDInstance;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
 	float WalkSpeed;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
 	float SprintSpeed;
 
-	// RPG 系统
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "RPG System")
 	int32 CharacterLevel;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "RPG System")
 	float CurrentXP;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "RPG System")
-	float MaxXP;
+	float MaxXP=100;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
 	float BaseAttackPower;
 
-	// --- 函数 ---
 	UFUNCTION(BlueprintCallable, Category = "RPG System")
 	void GainExperience(float Amount);
 	UFUNCTION(BlueprintPure, Category = "Combat")
 	float GetTotalAttackPower() const;
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
 	virtual void Die();
-
+	UFUNCTION(BlueprintCallable, Category = "RPG System")
+	void AddXP(float Amount);
+	UFUNCTION(BlueprintImplementableEvent, Category = "RPG System")
+	void LevelUp();
+	UFUNCTION(BlueprintCallable, Category = "RPG System")
+	void AddHealth(float Amount);
 protected:
 	virtual void BeginPlay();
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 	virtual void Tick(float DeltaTime) override;
 
-	/** 处理移动 */
 	void Move(const FInputActionValue& Value);
-	/** 处理视角 */
 	void Look(const FInputActionValue& Value);
-
-	// 动作函数
 	void Sprint();
 	void StopSprinting();
-	void TogglePause(const FInputActionValue& Value);
 
-	// [新增] 分身术实现函数
+	// [已删除] TogglePause (已移至 BaseCharacter)
+	// void TogglePause(const FInputActionValue& Value);
+
+	// 分身术功能
 	void PerformCloneSkill(const FInputActionValue& Value);
 	void DestroyClones();
 	void ResetCloneSkillCooldown();
 
-	// [新增] 自动生成导航网格
+	// 自动生成导航网格
 	void SpawnDynamicNavMesh();
 
-	/** 定身术具体的触发函数 */
+	// 定身术功能
 	void Immobilize(const FInputActionValue& Value);
 	void CastImmobilizeSkill();
+	void ResetImmobilizeCooldown();
 
-	// 辅助函数
+	// 辅助逻辑
 	void ResetCombo();
 	void ResetDodgeState();
 	void ResetDodgeCooldown();
 	void ResetSkillCooldown();
 	void ResetHitReactState();
 	void CheckAttackHit(float CurrentRange);
+	UFUNCTION(BlueprintCallable, Category = "RPG System")
 	void CheckLevelUp();
-	UFUNCTION(BlueprintImplementableEvent, Category = "RPG System")
-	void OnLevelUp();
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation|Idle")
 	float IdleWaitTime;
@@ -244,14 +226,15 @@ protected:
 	void ResetIdleTimer();
 
 public:
-	/** 获取分身冷却进度 (0.0 - 1.0) */
 	UFUNCTION(BlueprintPure, Category = "Combat|Clone")
 	float GetCloneCooldownFraction() const;
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Clone")
+	float GetCloneRechargePercent() const;
 
 	UFUNCTION(BlueprintPure, Category = "Combat|Skill")
 	float GetSkillCooldownFraction() const;
 
-	/** 获取冷却进度 (0.0 = 刚用完, 1.0 = 冷却完毕) */
 	UFUNCTION(BlueprintPure, Category = "Skills|UI")
 	float GetImmobilizeCooldownPercent() const;
 
@@ -259,13 +242,11 @@ public:
 	FORCEINLINE class UCameraComponent* GetFollowCamera() const { return FollowCamera; }
 
 private:
-	// 分身管理
 	UPROPERTY()
 	TArray<ACharacter*> ActiveClones;
 	FTimerHandle CloneLifeTimer;
 	FTimerHandle CloneCooldownTimer;
 
-	// 状态标记
 	int32 ComboIndex;
 	bool bIsAttacking;
 	bool bIsDodging;
@@ -286,20 +267,16 @@ private:
 	UPROPERTY()
 	UAnimMontage* CurrentSkillMontage;
 
-
 protected:
-	// 定身术的最大距离
 	UPROPERTY(EditAnywhere, Category = "Skills")
 	float ImmobilizeRange = 1000.0f;
 
-	// 定身术持续时间
 	UPROPERTY(EditAnywhere, Category = "Skills")
 	float ImmobilizeDuration = 3.0f;
 
-	/** 定身术冷却时间 (秒) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skills")
 	float ImmobilizeCooldownTime = 10.0f;
 
-	/** 冷却定时器句柄 */
 	FTimerHandle TimerHandle_ImmobilizeCooldown;
+	bool bIsImmobilizeOnCooldown;
 };

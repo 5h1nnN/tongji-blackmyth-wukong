@@ -55,17 +55,6 @@ void ACloneAIController::OnPossess(APawn* InPawn)
 void ACloneAIController::OnTargetDetected(AActor* Actor, FAIStimulus Stimulus)
 {
 
-	// --- 调试日志 (英文版，防止编译报错) ---
-	FString Info = FString::Printf(TEXT("AI Perception: Target[%s] | Sensed[%s] | TagMatch[%s]"),
-		*Actor->GetName(),
-		Stimulus.WasSuccessfullySensed() ? TEXT("YES") : TEXT("NO"),
-		Actor->ActorHasTag(FName("Enemy")) ? TEXT("YES") : TEXT("NO")
-	);
-
-	// 打印红色日志到屏幕
-	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Red, Info);
-	// --- 调试日志结束 ---
-
 	// 简单逻辑：只要看到带有 Enemy 标签的，就锁定为目标
 	if (Stimulus.WasSuccessfullySensed())
 	{
