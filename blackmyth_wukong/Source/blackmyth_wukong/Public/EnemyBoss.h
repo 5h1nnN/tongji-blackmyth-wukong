@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Enemies.h" // 继承自你之前的基类
+#include "BossHealthBar.h"
 #include "EnemyBoss.generated.h"
 
 class UBoxComponent;
@@ -126,4 +127,16 @@ protected:
 
 	// [新增] 清理所有分身的辅助函数
 	void KillAllMinions();
+
+protected:
+	// [修改] 这里使用具体的子类 TSubclassOf<UBossHealthBar>
+	// 这样在编辑器里，你只能选 Boss 专用的 UI 蓝图，防呆
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UBossHealthBar> BossHUDClass;
+
+	// [修改] 运行时实例也用子类指针保存																																																				
+	UPROPERTY()
+	UBossHealthBar* BossHUDInstance;
+
+	virtual void UpdateHealthUI() override;
 };

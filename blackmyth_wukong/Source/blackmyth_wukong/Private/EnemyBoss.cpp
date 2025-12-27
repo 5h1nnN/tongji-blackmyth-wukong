@@ -7,6 +7,7 @@
 #include "BrainComponent.h"
 #include "Particles/ParticleSystemComponent.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
+#include "Blueprint/UserWidget.h" 
 
 AEnemyBoss::AEnemyBoss()
 {
@@ -46,6 +47,32 @@ void AEnemyBoss::BeginPlay()
     if (WeaponCollisionStaff)
     {
         WeaponCollisionStaff->OnComponentBeginOverlap.AddDynamic(this, &AEnemyBoss::OnStaffOverlap);
+    }
+
+    // 1. 隐藏父类自带的头顶血条组件
+    if (HealthBarWidgetComp)
+    {
+        HealthBarWidgetComp->SetVisibility(false);
+    }
+
+    // 2. 创建屏幕 HUD (使用新的子类)
+    if (BossHUDClass && !bIsClone)
+    {
+        // 创建 Widget
+        BossHUDInstance = CreateWidget<UBossHealthBar>(GetWorld(), BossHUDClass);
+
+        if (BossHUDInstance)
+        {
+            // [关键] 添加到视口 (屏幕上方)
+            BossHUDInstance->AddToViewport(10); // ZOrder设高一点，防止被遮挡
+
+            // 初始化数据
+            // 1. 复用父类方法更新血条
+            BossHUDInstance->UpdateHealthPercent(Health / MaxHealth);
+
+            // 2. 使用子类新方法设置名字
+            BossHUDInstance->SetBossName(EnemyName);
+        }
     }
 }
 
@@ -195,6 +222,20 @@ void AEnemyBoss::SummonClones(int32 NumClones)
             AEnemyBoss* BossClone = Cast<AEnemyBoss>(Clone);
             BossClone->bIsClone = true;
 
+
+            if (BossClone->BossHUDInstance)
+            {
+                BossClone->BossHUDInstance->RemoveFromParent(); // 从屏幕移除
+                BossClone->BossHUDInstance = nullptr;           // 清空指针
+            }
+
+            if (BossClone->HealthBarWidgetComp)
+            {
+                BossClone->HealthBarWidgetComp->SetVisibility(false);
+                // 彻底停用组件，防止它在后台 tick 浪费性能
+                BossClone->HealthBarWidgetComp->Deactivate();
+            }
+
             // 可以削弱分身血量
             BossClone->MaxHealth = MaxHealth * 0.1f;
             BossClone->BaseDamage = BaseDamage * 0.5f;
@@ -225,7 +266,7 @@ void AEnemyBoss::EnableWeaponCollision(bool bEnableLeft, bool bEnableRight)
 void AEnemyBoss::DisableWeaponCollision()
 {
     // 调用父类是为了保险 (虽然 Boss 没有左右手碰撞盒，但调用一下无妨)
-    Super::DisableWeaponCollision();
+    AEnemies::DisableWeaponCollision();
 
     // 关闭金箍棒
     SetStaffCollision(false);
@@ -318,6 +359,13 @@ void AEnemyBoss::SpawnPhaseTwoMinions()
 
 void AEnemyBoss::HandleDeath()
 {
+    // 移除屏幕 HUD
+    if (BossHUDInstance)
+    {
+        BossHUDInstance->RemoveFromParent();
+        BossHUDInstance = nullptr;
+    }
+
     // 1. 如果我是本体，就处死所有分身
     if (!bIsClone)
     {
@@ -325,7 +373,7 @@ void AEnemyBoss::HandleDeath()
     }
 
     // 2. [关键] 必须调用父类的逻辑，执行原本的死亡动画、碰撞关闭等
-    Super::HandleDeath();
+    AEnemies::HandleDeath();
 }
 
 void AEnemyBoss::KillAllMinions()
@@ -354,4 +402,17 @@ void AEnemyBoss::KillAllMinions()
 
     // 清空列表
     ActiveMinions.Empty();
+}
+
+void AEnemyBoss::UpdateHealthUI()
+{
+    if (bIsClone) return;
+
+    // 重写父类逻辑：只更新屏幕上的 HUD
+    if (BossHUDInstance)
+    {
+        float Percent = Health / MaxHealth;
+        // 调用继承自父类的方法
+        BossHUDInstance->UpdateHealthPercent(Percent);
+    }
 }

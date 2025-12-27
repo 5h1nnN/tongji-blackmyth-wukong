@@ -159,7 +159,7 @@ protected:
     UWidgetComponent* ImmobilizeIconWidget;
 
     // 更新血条的辅助函数
-    void UpdateHealthUI();
+    virtual void UpdateHealthUI();
 
 public:
     // 每一帧调用
