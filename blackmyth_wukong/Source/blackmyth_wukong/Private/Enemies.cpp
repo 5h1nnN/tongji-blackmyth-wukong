@@ -92,7 +92,6 @@ float AEnemies::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, 
     Health = FMath::Clamp(Health - DamageApplied, 0.f, MaxHealth);
     // 更新 UI
     UpdateHealthUI();
-    // UE_LOG(LogTemp, Warning, TEXT("敌人剩余血量: %f"), Health);
 
     // 2. 判断死亡
     if (Health <= 0.f)
@@ -106,57 +105,68 @@ float AEnemies::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, 
     }
     else
     {
-        // 3. 没死 -> 播放受击动画 (打断当前攻击)
-        if (HitMontage)
+        // 只有当 "不处于硬直状态" 时，才触发受击反应
+        if (!bIsStunned)
         {
-            PlayAnimMontage(HitMontage);
+            // 1. 标记进入硬直
+            bIsStunned = true;
 
-        }
-        
-        // A. 获取 AI 控制器
-        AAIController* AIC = Cast<AAIController>(GetController());
-        if (IsAttackerBehind(DamageCauser) && TurnAttackMontage)
-        {
-            // A. 背后受击 -> 转身反击
-
-            // 1. 强制转向攻击者
-            RotateToFaceActor(DamageCauser);
-
-            // 2. 播放转身攻击蒙太奇
-            // StopAnimMontage(); // 打断当前动作
-            PlayAnimMontage(TurnAttackMontage);
-
-            // 3. 这里通常不需要打断 AI (StopLogic)，因为这是反击，不是硬直。
-            // 但如果为了防止 AI 在播动画时乱跑，可以先 StopMovement
-            if (AIC) AIC->StopMovement();
-
-            //// 调试信息
-            //if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Orange, TEXT("触发：背后反击！"));
-        }
-        else {
-            // B. 正面受击 -> 普通硬直 (之前的逻辑)
-            if (AIC)
+            // 3. 没死 -> 播放受击动画 (打断当前攻击)
+            if (HitMontage)
             {
-                // B. 物理打断：立刻停止移动
-                AIC->StopMovement();
+                PlayAnimMontage(HitMontage);
 
-                // C. 精神打断：暂停行为树逻辑 (防止它这时候决定攻击你)
-                if (AIC->GetBrainComponent())
-                {
-                    AIC->GetBrainComponent()->StopLogic("HitReaction");
-                }
             }
 
+            // A. 获取 AI 控制器
+            AAIController* AIC = Cast<AAIController>(GetController());
+            if (IsAttackerBehind(DamageCauser) && TurnAttackMontage)
+            {
+                // A. 背后受击 -> 转身反击
 
-            // E. 设置定时器：在 StunDuration 秒后，执行 RecoverFromStun 函数
-            // 如果再次受击，SetTimer 会自动重置时间（重置硬直）
-            GetWorldTimerManager().SetTimer(
-                StunTimerHandle,
-                this,
-                &AEnemies::RecoverFromStun,
-                StunDuration,
-                false
-            );
+                // 1. 强制转向攻击者
+                RotateToFaceActor(DamageCauser);
+
+                // 2. 播放转身攻击蒙太奇
+                StopAnimMontage(); // 打断当前动作
+                PlayAnimMontage(TurnAttackMontage);
+
+                // 3. 这里通常不需要打断 AI (StopLogic)，因为这是反击，不是硬直。
+                // 但如果为了防止 AI 在播动画时乱跑，可以先 StopMovement
+                if (AIC) AIC->StopMovement();
+
+                //// 调试信息
+                //if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Orange, TEXT("触发：背后反击！"));
+            }
+            else {
+                // B. 正面受击 -> 普通硬直 (之前的逻辑)
+                if (AIC)
+                {
+                    // B. 物理打断：立刻停止移动
+                    AIC->StopMovement();
+
+                    // C. 精神打断：暂停行为树逻辑 (防止它这时候决定攻击你)
+                    if (AIC->GetBrainComponent())
+                    {
+                        AIC->GetBrainComponent()->StopLogic("HitReaction");
+                    }
+                }
+
+
+                // E. 设置定时器：在 StunDuration 秒后，执行 RecoverFromStun 函数
+                // 如果再次受击，SetTimer 会自动重置时间（重置硬直）
+                GetWorldTimerManager().SetTimer(
+                    StunTimerHandle,
+                    this,
+                    &AEnemies::RecoverFromStun,
+                    StunDuration,
+                    false
+                );
+            }
+        }
+        else {
+            // 如果已经在硬直中，只扣血，不打断，不重置定时器
+            if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Orange, TEXT("Hit ignored due to Stun protection"));
         }
     }
 
@@ -286,6 +296,8 @@ void AEnemies::OnWeaponOverlap(UPrimitiveComponent* OverlappedComponent, AActor*
 void AEnemies::RecoverFromStun()
 {
     if (bIsDead) return; // 如果硬直期间死了，就不恢复了
+
+    bIsStunned = false;
 
     // 获取 AI 控制器
     AAIController* AIC = Cast<AAIController>(GetController());

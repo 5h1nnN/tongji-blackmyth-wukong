@@ -33,7 +33,7 @@ protected:
     // 开始游戏时调用
     virtual void BeginPlay() override;
 
-
+public:
     // 当前血量：允许在编辑器修改，并在蓝图中读写
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat | Stats")
     float Health = 100.f;
@@ -167,4 +167,12 @@ public:
 
     // 绑定输入（敌人通常不需要，可以保留为空）
     virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+
+    protected:
+        // [新增] 标记是否处于硬直状态
+        bool bIsStunned = false;
+
+        // [新增] 获取是否处于硬直 (如果需要给子类判断用)
+        bool IsStunned() const { return bIsStunned; }
 };
+
