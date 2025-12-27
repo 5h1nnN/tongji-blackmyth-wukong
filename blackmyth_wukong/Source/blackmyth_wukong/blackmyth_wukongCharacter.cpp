@@ -91,6 +91,13 @@ void Ablackmyth_wukongCharacter::BeginPlay()
 	// 添加输入映射上下文
 	if (APlayerController* PlayerController = Cast<APlayerController>(Controller))
 	{
+		// 1. 隐藏鼠标
+		PlayerController->bShowMouseCursor = false;
+
+		// 2. 把输入模式切回游戏（允许键盘移动）
+		FInputModeGameOnly InputMode;
+		PlayerController->SetInputMode(InputMode);
+
 		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
 		{
 			Subsystem->AddMappingContext(DefaultMappingContext, 0);
