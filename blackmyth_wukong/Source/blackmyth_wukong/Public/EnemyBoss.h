@@ -68,6 +68,12 @@ public:
 	// 处理阶段转换
 	void EnterPhaseTwo();
 
+	// [新增] 重写父类的开碰撞函数
+	virtual void EnableWeaponCollision(bool bEnableLeft, bool bEnableRight) override;
+
+	// [新增] 重写父类的关碰撞函数
+	virtual void DisableWeaponCollision() override;
+
 	// 开启/关闭金箍棒碰撞 (给动画通知调用)
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void SetStaffCollision(bool bActive);
@@ -108,4 +114,16 @@ protected:
 
 	// [新增] 辅助函数：专门用来在定时器结束后生成分身
 	void SpawnPhaseTwoMinions();
+
+protected:
+	// [新增] 存放当前存活的分身列表
+	// UPROPERTY() 能够防止指针对应的对象被意外垃圾回收，且方便调试
+	UPROPERTY(VisibleAnywhere, Category = "Boss | Minions")
+	TArray<AEnemies*> ActiveMinions;
+
+	// [新增] 重写死亡逻辑
+	virtual void HandleDeath() override;
+
+	// [新增] 清理所有分身的辅助函数
+	void KillAllMinions();
 };

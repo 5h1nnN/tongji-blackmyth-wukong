@@ -100,6 +100,10 @@ void AEnemyBoss::EnterPhaseTwo()
             FRotator::ZeroRotator,
             EAttachLocation::SnapToTarget
         );
+        if (ActiveInvincibilityFXComp)
+        {
+            ActiveInvincibilityFXComp->CustomTimeDilation = 0.4f;
+        }
     }
 
     // 1. 播放转阶段动画
@@ -169,6 +173,10 @@ void AEnemyBoss::SummonClones(int32 NumClones)
 
     FVector MyLoc = GetActorLocation();
 
+    // 清理一下数组，移除掉之前可能已经自然死亡或被销毁的分身 (空指针)
+    // 这一步不是必须的，但能保持数组干净
+    ActiveMinions.RemoveAll([](AEnemies* Ptr) { return Ptr == nullptr || Ptr->IsDead(); });
+
     for (int32 i = 0; i < NumClones; i++)
     {
         // 计算分身生成位置
@@ -192,10 +200,35 @@ void AEnemyBoss::SummonClones(int32 NumClones)
             BossClone->BaseDamage = BaseDamage * 0.5f;
             BossClone->HealthBarWidgetComp->SetVisibility(false);
 
+            ActiveMinions.Add(Clone);
+
             // 给分身生成特效
             UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), nullptr, SpawnLoc); // 这里填入烟雾特效
         }
     }
+}
+
+
+// 重写开启逻辑
+void AEnemyBoss::EnableWeaponCollision(bool bEnableLeft, bool bEnableRight)
+{
+    // 逻辑映射：
+    // 只要 Notify 想要开启左手 或 右手 (通常攻击蒙太奇都会勾选其中一个)
+    // 我们就开启金箍棒
+    if (bEnableLeft || bEnableRight)
+    {
+        SetStaffCollision(true);
+    }
+}
+
+// 重写关闭逻辑
+void AEnemyBoss::DisableWeaponCollision()
+{
+    // 调用父类是为了保险 (虽然 Boss 没有左右手碰撞盒，但调用一下无妨)
+    Super::DisableWeaponCollision();
+
+    // 关闭金箍棒
+    SetStaffCollision(false);
 }
 
 void AEnemyBoss::SetStaffCollision(bool bActive)
@@ -281,4 +314,44 @@ void AEnemyBoss::SpawnPhaseTwoMinions()
 
     // 生成 2 个分身
     SummonClones(2);
+}
+
+void AEnemyBoss::HandleDeath()
+{
+    // 1. 如果我是本体，就处死所有分身
+    if (!bIsClone)
+    {
+        KillAllMinions();
+    }
+
+    // 2. [关键] 必须调用父类的逻辑，执行原本的死亡动画、碰撞关闭等
+    Super::HandleDeath();
+}
+
+void AEnemyBoss::KillAllMinions()
+{
+    // 遍历所有记录的分身
+    for (AEnemies* Minion : ActiveMinions)
+    {
+        // 检查指针是否有效，且分身还没死
+        if (Minion && !Minion->IsDead())
+        {
+            // 方法一：直接造成巨额伤害 (推荐)
+            // 这样做的好处是会触发分身自己的 TakeDamage -> HandleDeath 流程
+            // 分身会播放死亡动画，而不是突然消失
+            UGameplayStatics::ApplyDamage(
+                Minion,
+                99999.f,             // 巨额伤害
+                GetController(),     // 凶手是本体的控制器
+                this,                // 凶手是本体
+                UDamageType::StaticClass()
+            );
+
+            // 方法二：如果你想让分身直接消失，不播动画
+            // Minion->Destroy();
+        }
+    }
+
+    // 清空列表
+    ActiveMinions.Empty();
 }
