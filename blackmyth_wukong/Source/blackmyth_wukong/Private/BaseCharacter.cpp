@@ -220,7 +220,7 @@ float ABaseCharacter::GetCooldownPercent() const
 {
 	if (bIsCooldown && GetWorldTimerManager().IsTimerActive(CooldownTimerHandle))
 	{
-		return FMath::Clamp(GetWorldTimerManager().GetTimerRemaining(CooldownTimerHandle) / TransformCooldownDuration, 0.0f, 1.0f);
+		return 1.0f - FMath::Clamp(GetWorldTimerManager().GetTimerRemaining(CooldownTimerHandle) / TransformCooldownDuration, 0.0f, 1.0f);
 	}
-	return 0.0f;
+	return 1.0f;
 }

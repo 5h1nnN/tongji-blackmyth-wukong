@@ -215,7 +215,7 @@ protected:
 	void ResetDodgeCooldown();
 	void ResetSkillCooldown();
 	void ResetHitReactState();
-	void CheckAttackHit(float CurrentRange);
+	void CheckAttackHit(float CurrentRange, float DamageMultiplier = 1.0f);
 	UFUNCTION(BlueprintCallable, Category = "RPG System")
 	void CheckLevelUp();
 

@@ -139,4 +139,9 @@ protected:
 	UBossHealthBar* BossHUDInstance;
 
 	virtual void UpdateHealthUI() override;
+
+protected:
+	// 新增：在编辑器中分配"胜利/游戏结束"的UI蓝图类
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
+	TSubclassOf<class UUserWidget> VictoryWidgetClass;
 };

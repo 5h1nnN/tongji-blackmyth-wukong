@@ -370,6 +370,51 @@ void AEnemyBoss::HandleDeath()
     if (!bIsClone)
     {
         KillAllMinions();
+
+        // 新增逻辑：处理游戏胜利 UI
+        if (VictoryWidgetClass)
+        {
+            // 定义一个定时器句柄
+            FTimerHandle TimerHandle_Victory;
+
+            // 获取当前的世界上下文
+            UWorld* World = GetWorld();
+            if (World)
+            {
+                // 设置定时器，延迟 3.0 秒执行（给 Boss 留出播放死亡动画的时间）
+                World->GetTimerManager().SetTimer(TimerHandle_Victory, [this]()
+                    {
+                        // 再次检查 World 是否有效 (防止切换关卡导致崩坏)
+                        if (!this || !GetWorld()) return;
+
+                        // 1. 创建 UI 控件
+                        UUserWidget* VictoryWidget = CreateWidget<UUserWidget>(GetWorld(), VictoryWidgetClass);
+
+                        if (VictoryWidget)
+                        {
+                            // 2. 添加到屏幕，ZOrder 设高一点确保覆盖所有东西
+                            VictoryWidget->AddToViewport(100);
+
+                            // 3. 获取玩家控制器来控制鼠标
+                            APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
+                            if (PC)
+                            {
+                                // 显示鼠标光标
+                                PC->bShowMouseCursor = true;
+
+                                // 设置输入模式为 UI Only (此时玩家不能再移动角色)
+                                FInputModeUIOnly InputMode;
+                                InputMode.SetWidgetToFocus(VictoryWidget->TakeWidget());
+                                InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+                                PC->SetInputMode(InputMode);
+
+                                // (可选) 如果你想让游戏暂停
+                                // UGameplayStatics::SetGamePaused(GetWorld(), true);
+                            }
+                        }
+                    }, 3.0f, false); // 3.0f 是延迟时间，可根据动画长度调整
+            }
+        }
     }
 
     // 2. [关键] 必须调用父类的逻辑，执行原本的死亡动画、碰撞关闭等
