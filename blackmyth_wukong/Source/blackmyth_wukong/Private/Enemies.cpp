@@ -87,6 +87,21 @@ float AEnemies::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, 
 {
     if (bIsDead) return 0.f; // 死了就不再扣血
 
+    // 新增：友军伤害过滤 (防止远程攻击误伤队友)
+    if (EventInstigator)
+    {
+        // 获取造成伤害的控制器的 Pawn (凶手)
+        APawn* AttackerPawn = EventInstigator->GetPawn();
+
+        // 如果凶手存在，且凶手也是 AEnemies 类 (或者是其子类)
+        if (AttackerPawn && AttackerPawn->IsA(AEnemies::StaticClass()))
+        {
+            // 如果是自己打自己(比如箭矢刚生成就撞到自己)，或者队友打我
+            // 直接忽略伤害
+            return 0.f;
+        }
+    }
+
     // 1. 扣血
     float DamageApplied = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
     Health = FMath::Clamp(Health - DamageApplied, 0.f, MaxHealth);
