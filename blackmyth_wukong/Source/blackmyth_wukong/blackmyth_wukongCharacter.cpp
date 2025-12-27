@@ -18,6 +18,7 @@
 #include "ImmobilizableInterface.h"
 #include "NavMesh/NavMeshBoundsVolume.h"
 #include "NavigationSystem.h"
+#include"Public/MyGameInstance.h"
 #include "Components/BrushComponent.h"
 #include "TimerManager.h"
 
@@ -76,7 +77,17 @@ Ablackmyth_wukongCharacter::Ablackmyth_wukongCharacter()
 void Ablackmyth_wukongCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-
+	UMyGameInstance* MyGI = Cast<UMyGameInstance>(GetGameInstance());
+	if (MyGI)
+	{
+		// 只有当 SavedHealth > 0 时才读取（防止第一次进游戏变成 -1 血）
+		if (MyGI->SavedMaxHealth > 0.0f)
+		{
+			this->MaxHealth = MyGI->SavedMaxHealth;
+			this->CurrentXP = MyGI->SavedXP;
+			this->CharacterLevel = MyGI->SavedLevel;
+		}
+	}
 	// 确保状态重置
 	CurrentHealth = MaxHealth;
 	bIsDead = false;
@@ -195,6 +206,40 @@ void Ablackmyth_wukongCharacter::SetupPlayerInputComponent(UInputComponent* Play
 		// 注意：PauseAction 的绑定已移至 BaseCharacter::SetupPlayerInputComponent
 	}
 }
+
+void Ablackmyth_wukongCharacter::AddHealth(float Amount)
+{
+	CurrentHealth += Amount;
+
+	// 可以在这里加个简单的限制，比如不超过100
+	if (CurrentHealth > MaxHealth)
+	{
+		CurrentHealth = MaxHealth;
+	}
+
+}
+
+void Ablackmyth_wukongCharacter::AddXP(float Amount)
+{
+	// 1. 增加经验
+	CurrentXP += Amount;
+	CheckLevelUp();
+}
+
+void Ablackmyth_wukongCharacter::CheckLevelUp()
+{
+	while (CurrentXP >= MaxXP)
+	{
+		CurrentXP -= MaxXP;
+		CharacterLevel++;
+		MaxHealth += 20.0f;
+		BaseAttackPower += 5.0f;
+		MaxXP = MaxXP * 1.5f;
+		CurrentHealth = MaxHealth;
+		LevelUp();
+	}
+}
+
 
 void Ablackmyth_wukongCharacter::PerformCloneSkill(const FInputActionValue& Value)
 {
@@ -594,7 +639,6 @@ void Ablackmyth_wukongCharacter::ResetIdleTimer()
 }
 
 void Ablackmyth_wukongCharacter::GainExperience(float Amount) { if (!bIsDead) { CurrentXP += Amount; CheckLevelUp(); } }
-void Ablackmyth_wukongCharacter::CheckLevelUp() { while (CurrentXP >= MaxXP) { CurrentXP -= MaxXP; CharacterLevel++; MaxHealth += 20.0f; BaseAttackPower += 5.0f; MaxXP *= 1.5f; CurrentHealth = MaxHealth; OnLevelUp(); } }
 float Ablackmyth_wukongCharacter::GetTotalAttackPower() const { return BaseAttackPower; }
 
 void Ablackmyth_wukongCharacter::Immobilize(const FInputActionValue& Value)
