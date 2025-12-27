@@ -1,5 +1,4 @@
 // AEnemySpawner.h
-
 #pragma once
 
 #include "CoreMinimal.h"
@@ -9,6 +8,29 @@
 // 前向声明
 class AEnemies;
 class UBoxComponent;
+
+// [新增] 定义每一波敌人的配置结构体
+USTRUCT(BlueprintType)
+struct FEnemyWaveConfig
+{
+    GENERATED_BODY()
+
+    // 敌人蓝图类
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TSubclassOf<AEnemies> EnemyClass;
+
+    // 这波敌人的总数量
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "1"))
+    int32 TotalCount = 1;
+
+    // 生成间隔（秒）
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.1"))
+    float SpawnInterval = 1.0f;
+
+    // [可选] 初始延迟：游戏开始多久后才开始刷这一波
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0"))
+    float StartDelay = 0.0f;
+};
 
 UCLASS()
 class BLACKMYTH_WUKONG_API AEnemySpawner : public AActor
@@ -22,19 +44,12 @@ protected:
     virtual void BeginPlay() override;
 
 public:
-    // ==================== 生成设置 ====================
+    // ==================== [修改] 生成设置 ====================
 
-    // 要生成的敌人蓝图类（在编辑器中选择你的敌人蓝图）
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawner")
-    TSubclassOf<AEnemies> EnemyClass;
-
-    // 生成数量
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawner")
-    int32 SpawnCount = 1;
-
-    // 生成间隔（秒）
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawner")
-    float SpawnInterval = 0.5f;
+    // [修改] 这里不再是单个变量，而是一个配置数组。
+    // 在编辑器里点 "+" 号添加 3 个元素，分别配置三种敌人。
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Spawner")
+    TArray<FEnemyWaveConfig> EnemyWaves;
 
     // 是否在游戏开始时自动生成
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawner")
@@ -50,33 +65,35 @@ public:
 
     // ==================== 可视化组件 ====================
 
-    // 生成区域可视化
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Spawner")
     UBoxComponent* SpawnArea;
 
     // ==================== 公开函数 ====================
 
-    // 生成单个敌人
+    // 开始所有波次的生成
     UFUNCTION(BlueprintCallable, Category = "Spawner")
-    AEnemies* SpawnEnemy();
-
-    // 生成多个敌人
-    UFUNCTION(BlueprintCallable, Category = "Spawner")
-    void SpawnAllEnemies();
+    void StartAllSpawns();
 
 private:
-    // 已生成的数量计数
-    int32 CurrentSpawnedCount = 0;
+    // ==================== [新增] 内部逻辑变量 ====================
 
-    // 定时器句柄
-    FTimerHandle SpawnTimerHandle;
+    // 记录每一波还剩多少个怪没刷 (索引对应 EnemyWaves)
+    TArray<int32> WaveRemainingCounts;
 
-    // 存储已生成的敌人
+    // 每一波独立的定时器句柄，互不干扰
+    TArray<FTimerHandle> WaveTimerHandles;
+
+    // 存储已生成的所有敌人引用
     UPROPERTY()
     TArray<AEnemies*> SpawnedEnemies;
 
-    // 定时器回调
-    void OnSpawnTimerTick();
+    // ==================== 内部函数 ====================
+
+    // 处理某一波生成的逻辑 (带参数，由定时器调用)
+    void HandleWaveSpawn(int32 WaveIndex);
+
+    // 实际执行生成一个单位
+    void SpawnOneEnemy(int32 WaveIndex);
 
     // 获取生成位置
     FVector GetSpawnLocation();

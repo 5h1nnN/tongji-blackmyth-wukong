@@ -6,10 +6,11 @@
 #include "GameFramework/Character.h"
 #include "Components/WidgetComponent.h"
 #include "EnemyHealthBar.h"
+#include "BaseFood.h"
 #include "ImmobilizableInterface.h"
 #include "Enemies.generated.h"
 
-
+class ABaseFood;
 class UBoxComponent;
 class ASparrowProjectile;
 
@@ -168,11 +169,22 @@ public:
     // 绑定输入（敌人通常不需要，可以保留为空）
     virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
-    protected:
-        // [新增] 标记是否处于硬直状态
-        bool bIsStunned = false;
+protected:
+    // [新增] 标记是否处于硬直状态
+    bool bIsStunned = false;
 
-        // [新增] 获取是否处于硬直 (如果需要给子类判断用)
-        bool IsStunned() const { return bIsStunned; }
+    // [新增] 获取是否处于硬直 (如果需要给子类判断用)
+    bool IsStunned() const {
+        return bIsStunned;
+
+    }
+protected:
+
+    // [新增] 掉落物列表：允许在蓝图中配置掉落哪些 BaseFood 的子类
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Loot")
+    TArray<TSubclassOf<ABaseFood>> LootDropList;
+
+    // [新增] 执行掉落的函数
+    virtual void SpawnLoot();
 };
 
