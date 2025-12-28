@@ -7,7 +7,7 @@
 UAnimNotify_FireEnemyArrow::UAnimNotify_FireEnemyArrow()
 {
     // 设置编辑器显示的颜色
-    NotifyColor = FColor(255, 0, 0, 255); // 红色
+    // NotifyColor = FColor(255, 0, 0, 255); // 红色
 }
 
 void UAnimNotify_FireEnemyArrow::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation, const FAnimNotifyEventReference& EventReference)
