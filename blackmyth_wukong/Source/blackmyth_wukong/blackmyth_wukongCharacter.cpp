@@ -124,19 +124,19 @@ void Ablackmyth_wukongCharacter::BeginPlay()
 	ResetIdleTimer();
 	SpawnDynamicNavMesh();
 
-	// 创建并显示常驻 HUD (进度条等)
-	if (HUDWidgetClass)
-	{
-		if (!HUDInstance)
-		{
-			HUDInstance = CreateWidget<UUserWidget>(GetWorld(), HUDWidgetClass);
-		}
+	// // 创建并显示常驻 HUD (进度条等)
+	// if (HUDWidgetClass)
+	// {
+	// 	if (!HUDInstance)
+	// 	{
+	// 		HUDInstance = CreateWidget<UUserWidget>(GetWorld(), HUDWidgetClass);
+	// 	}
 
-		if (HUDInstance)
-		{
-			HUDInstance->AddToViewport();
-		}
-	}
+	// 	if (HUDInstance)
+	// 	{
+	// 		HUDInstance->AddToViewport();
+	// 	}
+	// }
 }
 
 void Ablackmyth_wukongCharacter::SpawnDynamicNavMesh()

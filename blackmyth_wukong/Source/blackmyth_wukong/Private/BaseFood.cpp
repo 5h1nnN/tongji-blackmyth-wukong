@@ -25,7 +25,7 @@ ABaseFood::ABaseFood()
     TipWidget->SetHiddenInGame(true);                // 默认隐藏
 }
 
-// 默认实现：如果不重写，默认就是销毁自己
+// 默认销毁自己
 void ABaseFood::ApplyEffect_Implementation(class Ablackmyth_wukongCharacter* TargetCharacter)
 {
     Destroy();

@@ -2,11 +2,11 @@
 
 
 #include "AN_FireEnemyArrow.h"
-#include "Enemies.h" // 必须引用你的敌人头文件，否则无法调用 FireRangedAttack
+#include "Enemies.h" // 引用敌人头文件
 
 UAnimNotify_FireEnemyArrow::UAnimNotify_FireEnemyArrow()
 {
-    // 设置编辑器显示的颜色 (可选)
+    // 设置编辑器显示的颜色
     NotifyColor = FColor(255, 0, 0, 255); // 红色
 }
 

@@ -1,11 +1,11 @@
 #include "BaseCharacter.h"
-#include "FeyCharacter.h" // 如果变身逻辑需要识别 Fey
+#include "FeyCharacter.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputMappingContext.h"
 #include "NiagaraFunctionLibrary.h"
 #include "Kismet/GameplayStatics.h"
-#include "Kismet/KismetSystemLibrary.h" // 必须包含：用于 QuitGame
+#include "Kismet/KismetSystemLibrary.h" // 用于 QuitGame
 #include "Blueprint/UserWidget.h"
 #include "GameFramework/PlayerController.h"
 
@@ -57,7 +57,7 @@ void ABaseCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 }
 
 // ============================================================================
-//                              暂停与 UI 系统 (核心修复)
+//                              暂停与 UI 系统
 // ============================================================================
 
 void ABaseCharacter::TogglePause(const FInputActionValue& Value)
@@ -88,7 +88,7 @@ void ABaseCharacter::TogglePause(const FInputActionValue& Value)
 			{
 				PauseMenuInstance->AddToViewport();
 
-				// [关键修复] 使用 FInputModeGameAndUI 并设置焦点
+				// 使用 FInputModeGameAndUI 并设置焦点
 				FInputModeGameAndUI InputMode;
 				InputMode.SetWidgetToFocus(PauseMenuInstance->TakeWidget()); // 让 UI 立即获得焦点
 				InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
@@ -112,8 +112,7 @@ void ABaseCharacter::ResumeGameFromUI()
 	if (PauseMenuInstance)
 	{
 		PauseMenuInstance->RemoveFromParent();
-		// 注意：如果不销毁实例，下次打开会保留上次的状态。
-		// 如果希望每次打开都是新的，可以添加 PauseMenuInstance = nullptr;
+		// 如果不销毁实例，下次打开会保留上次的状态。
 	}
 
 	// 恢复输入模式为纯游戏
@@ -124,7 +123,7 @@ void ABaseCharacter::ResumeGameFromUI()
 
 void ABaseCharacter::RestartLevel()
 {
-	// [必须] 在重新加载关卡前解除暂停，否则新关卡可能卡住
+	// 在重新加载关卡前解除暂停，否则新关卡可能卡住
 	UGameplayStatics::SetGamePaused(GetWorld(), false);
 
 	FString CurrentLevelName = UGameplayStatics::GetCurrentLevelName(GetWorld());
@@ -173,8 +172,7 @@ void ABaseCharacter::TransformCharacter()
 			NewCharacter->CurrentHealth = this->CurrentHealth;
 
 			// 如果当前是 Fey (从 Fey 变回 Wukong)，或者新的是 Fey，
-			// 根据你的逻辑，这里可能需要触发冷却。
-			// 假设逻辑是：只要使用了变身功能，就进入冷却。
+			// 使用了变身功能，就进入冷却。
 			AFeyCharacter* CurrentIsFey = Cast<AFeyCharacter>(this);
 
 			// 控制权移交
