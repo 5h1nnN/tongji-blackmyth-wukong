@@ -21,7 +21,7 @@ void UMyMainMenuWidget::NativeConstruct()
 void UMyMainMenuWidget::OnStartClicked()
 {
     if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("start game"));
-    UGameplayStatics::OpenLevel(this, FName("Rain_Forest"));
+    UGameplayStatics::OpenLevel(this, FName("MedievalVillage"));
 }
 
 void UMyMainMenuWidget::OnQuitClicked()
