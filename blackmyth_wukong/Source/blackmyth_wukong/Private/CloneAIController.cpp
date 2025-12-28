@@ -55,7 +55,7 @@ void ACloneAIController::OnPossess(APawn* InPawn)
 void ACloneAIController::OnTargetDetected(AActor* Actor, FAIStimulus Stimulus)
 {
 
-	// 简单逻辑：只要看到带有 Enemy 标签的，就锁定为目标
+	// 只要看到带有 Enemy 标签的，就锁定为目标
 	if (Stimulus.WasSuccessfullySensed())
 	{
 		if (Actor->ActorHasTag(FName("Enemy")))
@@ -66,8 +66,6 @@ void ACloneAIController::OnTargetDetected(AActor* Actor, FAIStimulus Stimulus)
 	else
 	{
 		// 丢失视野时不立即清除，让 AI 跑到最后看到的位置（BehaviorTree 处理）
-		// 如果需要立即清除，取消下面注释：
-		// if (GetTargetEnemy() == Actor) GetBlackboardComponent()->ClearValue(TargetKeyName);
 	}
 }
 

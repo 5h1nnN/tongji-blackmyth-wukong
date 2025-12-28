@@ -40,10 +40,9 @@ void ADoorActor::OnOverlapBegin(UPrimitiveComponent* OverlappedComp, AActor* Oth
 		if (PC && OtherActor == PC->GetPawn())
 		{
 
-			// 【关键】必须开启输入权限，否则蓝图里的按键事件也不会响应
+			// 开启输入权限，否则蓝图里的按键事件也不会响应
 			EnableInput(PC);
 
-			// 注意：这里没有任何 BindAction 的代码了！
 		}
 	}
 }
@@ -61,7 +60,7 @@ void ADoorActor::OnOverlapEnd(UPrimitiveComponent* OverlappedComp, AActor* Other
 	}
 }
 
-// 3. 这是一个可以被蓝图调用的“扳机”
+// 3. 可以被蓝图调用
 void ADoorActor::TriggerInteraction()
 {
 
@@ -83,25 +82,22 @@ void ADoorActor::Interact_Implementation(APawn* InstigatorPawn)
 		return;
 	}
 
-	// --- 新增保存逻辑开始 ---
 
-	// 1. 将传入的 Pawn 转换为你的自定义角色类
-	// 注意：这里的 InstigatorPawn 就是触发交互的玩家
+	// 1. 将传入的 Pawn 转换为自定义角色类
+	// 这里的 InstigatorPawn 就是触发交互的玩家
 	if (Ablackmyth_wukongCharacter* MyChar = Cast<Ablackmyth_wukongCharacter>(InstigatorPawn))
 	{
 		// 2. 获取自定义的游戏实例 (GameInstance)
 		if (UMyGameInstance* MyGI = Cast<UMyGameInstance>(GetGameInstance()))
 		{
 			// 3. 将角色身上的数据“上传”给 GameInstance
-			// 请确保你的变量名与下面的一致，如果不一致请手动修改
-			MyGI->SavedMaxHealth = MyChar->MaxHealth; // 假设角色里叫 CurrentHealth
-			MyGI->SavedXP = MyChar->CurrentXP;     // 假设角色里叫 CurrentXP
-			MyGI->SavedLevel = MyChar->CharacterLevel;  // 假设角色里叫 CurrentLevel
+			MyGI->SavedMaxHealth = MyChar->MaxHealth;
+			MyGI->SavedXP = MyChar->CurrentXP;
+			MyGI->SavedLevel = MyChar->CharacterLevel;
 
 		}
 	}
 
-	// --- 新增保存逻辑结束 ---
 
 	// 4. 执行跳转
 	FString Msg = FString::Printf(TEXT("Loading Level: %s"), *TargetLevelName.ToString());

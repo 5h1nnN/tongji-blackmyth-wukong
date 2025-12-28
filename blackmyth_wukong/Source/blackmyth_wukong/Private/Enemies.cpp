@@ -22,7 +22,7 @@ AEnemies::AEnemies()
 	MaxHealth = 100.f;
 	Health = MaxHealth;
 
-	// --- 1. 初始化右手 (原有的) ---
+	// 初始化右手
     WeaponCollisionR = CreateDefaultSubobject<UBoxComponent>(TEXT("WeaponCollisionR"));
     WeaponCollisionR->SetupAttachment(GetMesh(), FName("FX_Trail_R_02")); // 绑定右手
     WeaponCollisionR->SetBoxExtent(FVector(40.f, 40.f, 60.f));
@@ -30,7 +30,7 @@ AEnemies::AEnemies()
     WeaponCollisionR->SetCollisionResponseToAllChannels(ECR_Ignore);
     WeaponCollisionR->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
 
-    // --- 2. 初始化左手 (新增的) ---
+    // 初始化左手
     WeaponCollisionL = CreateDefaultSubobject<UBoxComponent>(TEXT("WeaponCollisionL"));
     WeaponCollisionL->SetupAttachment(GetMesh(), FName("FX_Trail_L_02")); // 绑定左手
     WeaponCollisionL->SetBoxExtent(FVector(40.f, 40.f, 60.f));
@@ -48,20 +48,19 @@ AEnemies::AEnemies()
 
     RangedSocketName = TEXT("Muzzle_01");
 
-    // 1. 创建组件
+    // 创建组件
     ImmobilizeIconWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("ImmobilizeIcon"));
     ImmobilizeIconWidget->SetupAttachment(GetRootComponent());
 
-    // 2. 设置默认属性
+    // 设置默认属性
     ImmobilizeIconWidget->SetWidgetSpace(EWidgetSpace::Screen); // Screen模式：始终面向屏幕，不管敌人怎么转
     ImmobilizeIconWidget->SetDrawAtDesiredSize(true);           // 自动调整大小
     ImmobilizeIconWidget->SetVisibility(false);                 // 默认隐藏
 
-    // 设置位置 (根据你的模型调整 Z 值，大概在头顶位置)
+    // 设置位置
     ImmobilizeIconWidget->SetRelativeLocation(FVector(0.f, 0.f, 150.f));
 }
 
-// Called when the game starts or when spawned	
 void AEnemies::BeginPlay()
 {
     Super::BeginPlay();
@@ -82,12 +81,12 @@ void AEnemies::BeginPlay()
     }
 }
 
-// 核心逻辑：处理受击伤害
+// 处理受击伤害
 float AEnemies::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
 {
     if (bIsDead) return 0.f; // 死了就不再扣血
 
-    // 新增：友军伤害过滤 (防止远程攻击误伤队友)
+    // 友军伤害过滤 (防止远程攻击误伤队友)
     if (EventInstigator)
     {
         // 获取造成伤害的控制器的 Pawn (凶手)
@@ -123,17 +122,17 @@ float AEnemies::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, 
         // 只有当 "不处于硬直状态" 时，才触发受击反应
         if (!bIsStunned)
         {
-            // 1. 标记进入硬直
+            // 标记进入硬直
             bIsStunned = true;
 
-            // 3. 没死 -> 播放受击动画 (打断当前攻击)
+            // 没死 -> 播放受击动画 (打断当前攻击)
             if (HitMontage)
             {
                 PlayAnimMontage(HitMontage);
 
             }
 
-            // A. 获取 AI 控制器
+            // 获取 AI 控制器
             AAIController* AIC = Cast<AAIController>(GetController());
             if (IsAttackerBehind(DamageCauser) && TurnAttackMontage)
             {
@@ -146,21 +145,18 @@ float AEnemies::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, 
                 StopAnimMontage(); // 打断当前动作
                 PlayAnimMontage(TurnAttackMontage);
 
-                // 3. 这里通常不需要打断 AI (StopLogic)，因为这是反击，不是硬直。
-                // 但如果为了防止 AI 在播动画时乱跑，可以先 StopMovement
+                // 为了防止 AI 在播动画时乱跑，可以先 StopMovement
                 if (AIC) AIC->StopMovement();
 
-                //// 调试信息
-                //if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Orange, TEXT("触发：背后反击！"));
             }
             else {
-                // B. 正面受击 -> 普通硬直 (之前的逻辑)
+                // B. 正面受击 -> 普通硬直
                 if (AIC)
                 {
-                    // B. 物理打断：立刻停止移动
+                    // 立刻停止移动
                     AIC->StopMovement();
 
-                    // C. 精神打断：暂停行为树逻辑 (防止它这时候决定攻击你)
+                    // 暂停行为树逻辑 (防止它这时候决定攻击你)
                     if (AIC->GetBrainComponent())
                     {
                         AIC->GetBrainComponent()->StopLogic("HitReaction");
@@ -168,7 +164,7 @@ float AEnemies::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, 
                 }
 
 
-                // E. 设置定时器：在 StunDuration 秒后，执行 RecoverFromStun 函数
+                // 设置定时器：在 StunDuration 秒后，执行 RecoverFromStun 函数
                 // 如果再次受击，SetTimer 会自动重置时间（重置硬直）
                 GetWorldTimerManager().SetTimer(
                     StunTimerHandle,
@@ -181,7 +177,7 @@ float AEnemies::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, 
         }
         else {
             // 如果已经在硬直中，只扣血，不打断，不重置定时器
-            if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Orange, TEXT("Hit ignored due to Stun protection"));
+            // if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Orange, TEXT("Hit ignored due to Stun protection"));
         }
     }
 
@@ -189,22 +185,17 @@ float AEnemies::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, 
     if (Health <= 0.f)
     {
         // 打印调试
-        if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("death"));
+        // if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("death"));
         HandleDeath();
     }
     else
     {
         // 打印调试
-        if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, TEXT("hit"));
+        // if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, TEXT("hit"));
 
         if (HitMontage)
         {
             PlayAnimMontage(HitMontage);
-        }
-        else
-        {
-            // 关键调试：如果这一行出来了，说明你在蓝图里没选资源！
-            if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("ERROR"));
         }
     }
 
@@ -280,7 +271,6 @@ void AEnemies::OnWeaponOverlap(UPrimitiveComponent* OverlappedComponent, AActor*
     }
 
     // 如果是 Character (比如玩家)
-    // 这里简单用 Cast 判断，实际项目中通常用 Tag 或 Interface 区分敌我
     if (OtherActor->IsA(ACharacter::StaticClass())) 
     {
         // 3. 防重复检查：如果这一刀已经砍过这个人，就不再扣血
@@ -298,7 +288,7 @@ void AEnemies::OnWeaponOverlap(UPrimitiveComponent* OverlappedComponent, AActor*
             UDamageType::StaticClass() // 伤害类型
         );
 
-        // // 6. 打印调试信息
+        // 打印调试
         // if (GEngine)
         // {
         //     FString Msg = FString::Printf(TEXT("target: %s, damage: %f"), *OtherActor->GetName(), BaseDamage);
@@ -359,7 +349,7 @@ void AEnemies::RotateToFaceActor(AActor* TargetActor)
     // 只保留 Y轴旋转 (Yaw)，防止敌人歪倒
     FRotator TargetRot(0.f, LookAtRot.Yaw, 0.f);
 
-    // 瞬间转向 (简单粗暴，适合配合转身动画)
+    // 瞬间转向
     SetActorRotation(TargetRot);
 }
 
@@ -386,8 +376,7 @@ void AEnemies::FireRangedAttack()
     {
         SocketLoc = GetMesh()->GetSocketLocation(RangedSocketName);
 
-        // --- 智能瞄准逻辑 ---
-        // 如果我们是AI，并且锁定了目标，我们应该朝目标射击，而不是只看手指向哪里
+        // 瞄准逻辑
         AAIController* AIC = Cast<AAIController>(GetController());
         if (AIC && AIC->GetFocusActor())
         {
@@ -403,14 +392,14 @@ void AEnemies::FireRangedAttack()
     }
     else
     {
-        // 容错：如果没有插槽，从胸前发射
+        // 如果没有插槽，从胸前发射
         SocketLoc = GetActorLocation() + GetActorForwardVector() * 50.f + FVector(0, 0, 50.f);
         SocketRot = GetActorRotation();
     }
 
     // 3. 配置生成参数
     FActorSpawnParameters SpawnParams;
-    SpawnParams.Owner = this; // 这一点很重要，确保箭矢知道是敌人射的，OnHit里才能获取 Instigator
+    SpawnParams.Owner = this; // 确保箭矢知道是敌人射的，OnHit里才能获取 Instigator
     SpawnParams.Instigator = this;
     SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn; // 强制生成
 
@@ -438,13 +427,12 @@ void AEnemies::UpdateHealthUI()
 }
 
 
-// Called every frame
 void AEnemies::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 }
 
-// Called to bind functionality to input
+
 void AEnemies::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
@@ -467,10 +455,9 @@ void AEnemies::OnImmobilized_Implementation(float Duration)
     GetCharacterMovement()->DisableMovement();
     GetCharacterMovement()->StopMovementImmediately();
 
-    // 仅冻结Mesh动画
+    // 仅冻结 Mesh动画
     GetMesh()->bPauseAnims = true;
 
-    // 4. 视觉效果 (在蓝图中实现材质变化、粒子生成)
     BP_OnImmobilizeVisuals(true);
 
     // 显示 UI
@@ -479,7 +466,7 @@ void AEnemies::OnImmobilized_Implementation(float Duration)
         ImmobilizeIconWidget->SetVisibility(true);
     }
 
-    // 5. 设置定时器自动解除
+    // 3. 设置定时器自动解除
     GetWorld()->GetTimerManager().SetTimer(TimerHandle_Immobilize, this, &AEnemies::HandleImmobilizeTimeout, Duration, false);
 }
 
@@ -528,11 +515,11 @@ void AEnemies::SpawnLoot()
 
     if (ItemClassToSpawn)
     {
-        // 3. 设定生成位置 (在敌人位置稍微向上抬高一点，防止卡地里)
+        // 3. 设定生成位置 (在敌人位置稍微向上抬高)
         FVector SpawnLocation = GetActorLocation() + FVector(0.f, 0.f, 50.f);
         FRotator SpawnRotation = GetActorRotation(); // 或者使用 FRotator::ZeroRotator
 
-        // 4. 生成参数：强制生成，即使碰撞重叠
+        // 4. 强制生成，即使碰撞重叠
         FActorSpawnParameters SpawnParams;
         SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
         SpawnParams.Owner = this;
