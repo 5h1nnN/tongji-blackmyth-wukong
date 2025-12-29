@@ -435,8 +435,8 @@ void AEnemyBoss::KillAllMinions()
             UGameplayStatics::ApplyDamage(
                 Minion,
                 99999.f,             // 巨额伤害
-                GetController(),     // 凶手是本体的控制器
-                this,                // 凶手是本体
+                nullptr,     // 凶手是本体的控制器
+                nullptr,                // 凶手是本体
                 UDamageType::StaticClass()
             );
 
