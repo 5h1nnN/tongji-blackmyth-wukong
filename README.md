@@ -17,24 +17,43 @@
 ## 3	实现功能
 
 - 开场动画
+
 ![1](assets/gifs/start.gif)
+
 - 基础攻击、物品交互
+
 ![2](assets/gifs/light_attack.gif)
+
 - 戳棍法、定身术
+
 ![3](assets/gifs/freeze.gif)
+
 - 分身术
+
 ![4](assets/gifs/clone.gif)
+
 - 变身术
+
 ![5](assets/gifs/transform.gif)
+
 - 关卡切换
+
 ![6](assets/gifs/teleport.gif)
+
 - Boss二阶段
+
 ![7](assets/gifs/phase_two.gif)
+
 - 暂停UI
+
 ![8](assets/gifs/pause.gif)
+
 - 死亡UI
+
 ![9](assets/gifs/die.gif)
+
 - 通关UI
+
 ![10](assets/gifs/victory.gif)
 
 ## 4	操控方法
