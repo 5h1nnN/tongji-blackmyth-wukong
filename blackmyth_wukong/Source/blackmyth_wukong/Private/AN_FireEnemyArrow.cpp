@@ -1,6 +1,3 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
-
 #include "AN_FireEnemyArrow.h"
 #include "Enemies.h" // 引用敌人头文件
 

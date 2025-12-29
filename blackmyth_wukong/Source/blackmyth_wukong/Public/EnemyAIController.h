@@ -1,5 +1,3 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #pragma once
 
 #include "CoreMinimal.h"
@@ -22,7 +20,7 @@ public:
 
 protected:
     // --- 1. 核心 AI 组件 ---
-    // 行为树组件 (虽然 AAIController 自带 BrainComponent，但显式声明更清晰)
+    // 行为树组件
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AI")
     UBehaviorTreeComponent* BehaviorTreeComp;
 

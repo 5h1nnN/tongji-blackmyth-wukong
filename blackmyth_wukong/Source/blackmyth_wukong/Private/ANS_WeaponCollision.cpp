@@ -1,6 +1,3 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
-
 #include "ANS_WeaponCollision.h"
 #include "Enemies.h"
 UANS_WeaponCollision::UANS_WeaponCollision()

@@ -1,5 +1,3 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #pragma once
 
 #include "CoreMinimal.h"
@@ -14,7 +12,7 @@ class BLACKMYTH_WUKONG_API UEnemyHealthBar : public UUserWidget
 
 public:
     // 绑定蓝图中的进度条控件
-    // meta = (BindWidget) 意味着：你在蓝图里必须有个名字一模一样的进度条，否则报错
+    // meta = (BindWidget) 确认有名字完全相同的进度条，否则报错
     UPROPERTY(meta = (BindWidget))
     UProgressBar* HealthProgressBar;
 

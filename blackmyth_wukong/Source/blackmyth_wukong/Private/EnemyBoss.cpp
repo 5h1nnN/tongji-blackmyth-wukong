@@ -17,16 +17,16 @@ AEnemyBoss::AEnemyBoss()
     BaseDamage = 20.f;  // Boss 伤害更高
     EnemyName = FText::FromString("GreatSage"); // UI 显示名字
 
-    // 2. 调整体型 (Boss 通常比普通怪大一点)
+    // 2. 调整体型
     GetCapsuleComponent()->SetCapsuleSize(45.f, 110.f);
 
-    // 3. 调整移动 (Wukong 比较灵活)
+    // 3. 调整移动
     GetCharacterMovement()->MaxWalkSpeed = 500.f;
     GetCharacterMovement()->RotationRate = FRotator(0.f, 400.f, 0.f); // 转身更快
 
     // 4. 初始化金箍棒碰撞盒
     WeaponCollisionStaff = CreateDefaultSubobject<UBoxComponent>(TEXT("WeaponCollisionStaff"));
-    // 绑定到右手或特定插槽 (Paragon Wukong 武器插槽通常叫 "weapon_r" 或 "FX_Trail_R_02")
+    // 绑定到右手或特定插槽
     WeaponCollisionStaff->SetupAttachment(GetMesh(), FName("weapon_r"));
     // 金箍棒很长，设置一个长条形的碰撞盒
     WeaponCollisionStaff->SetBoxExtent(FVector(10.f, 10.f, 120.f));
@@ -55,7 +55,7 @@ void AEnemyBoss::BeginPlay()
         HealthBarWidgetComp->SetVisibility(false);
     }
 
-    // 2. 创建屏幕 HUD (使用新的子类)
+    // 2. 创建屏幕 HUD
     if (BossHUDClass && !bIsClone)
     {
         // 创建 Widget
@@ -63,7 +63,7 @@ void AEnemyBoss::BeginPlay()
 
         if (BossHUDInstance)
         {
-            // [关键] 添加到视口 (屏幕上方)
+            // 添加到视口 (屏幕上方)
             BossHUDInstance->AddToViewport(10); // ZOrder设高一点，防止被遮挡
 
             // 初始化数据
@@ -81,10 +81,8 @@ float AEnemyBoss::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent
     // 无敌检查
     if (bIsInvincible)
     {
-        // 可以播放一个“叮”的金属音效，提示玩家攻击无效
-        // UGameplayStatics::PlaySoundAtLocation(this, BlockSound, GetActorLocation());
-
-        if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Blue, TEXT("Boss is Invincible!"));
+        // 打印调试
+        // if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Blue, TEXT("Boss is Invincible!"));
         return 0.f; // 直接返回，不扣血
     }
 
@@ -95,7 +93,7 @@ float AEnemyBoss::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent
         Health = FMath::Clamp(PendingHealth, 0.f, MaxHealth);
         UpdateHealthUI();
 
-        // 2. 检查是否死亡，死了就不处理阶段了
+        // 2. 检查是否死亡，死了就不处理阶段
         if (bIsDead) return ActualDamage;
 
         StunDuration = 10.0f;
@@ -115,7 +113,7 @@ void AEnemyBoss::EnterPhaseTwo()
 
     bIsStunned = true;
 
-    // 生成无敌特效 (如果有设置)
+    // 生成无敌特效
     if (InvincibilityFX)
     {
         // SpawnEmitterAttached 会让特效跟着 Boss 移动
@@ -146,7 +144,7 @@ void AEnemyBoss::EnterPhaseTwo()
             AIC->StopMovement();
             AIC->ClearFocus(EAIFocusPriority::Gameplay);
 
-            // 停止行为树逻辑 (BrainComponent)
+            // 停止行为树逻辑
             if (AIC->GetBrainComponent())
             {
                 AIC->GetBrainComponent()->StopLogic("PhaseTwoFreeze");
@@ -154,8 +152,6 @@ void AEnemyBoss::EnterPhaseTwo()
             UBehaviorTreeComponent* BTComp = Cast<UBehaviorTreeComponent>(AIC->GetBrainComponent());
             if (BTComp)
             {
-                // StopTree 会发送 Abort 信号给当前正在运行的蓝图 Task
-                // 从而触发你刚才写的 "Event Receive Abort AI"
                 BTComp->StopTree(EBTStopMode::Safe);
             }
         }
@@ -175,6 +171,7 @@ void AEnemyBoss::EnterPhaseTwo()
         false
     );
 
+    // 设置定时器自动生成分身
     GetWorldTimerManager().SetTimer(
         SpawnTimerHandle,
         this,
@@ -188,7 +185,7 @@ void AEnemyBoss::EnterPhaseTwo()
     GetCharacterMovement()->MaxWalkSpeed = 700.f; // 移动变快
 
 
-    //// 4. 打印调试
+    // 打印调试
     //if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("BOSS ENRAGED: PHASE 2!"));
 }
 
@@ -232,7 +229,7 @@ void AEnemyBoss::SummonClones(int32 NumClones)
             if (BossClone->HealthBarWidgetComp)
             {
                 BossClone->HealthBarWidgetComp->SetVisibility(false);
-                // 彻底停用组件，防止它在后台 tick 浪费性能
+                // 彻底停用组件
                 BossClone->HealthBarWidgetComp->Deactivate();
             }
 
@@ -242,9 +239,6 @@ void AEnemyBoss::SummonClones(int32 NumClones)
             BossClone->HealthBarWidgetComp->SetVisibility(false);
 
             ActiveMinions.Add(Clone);
-
-            // 给分身生成特效
-            UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), nullptr, SpawnLoc); // 这里填入烟雾特效
         }
     }
 }
@@ -254,7 +248,7 @@ void AEnemyBoss::SummonClones(int32 NumClones)
 void AEnemyBoss::EnableWeaponCollision(bool bEnableLeft, bool bEnableRight)
 {
     // 逻辑映射：
-    // 只要 Notify 想要开启左手 或 右手 (通常攻击蒙太奇都会勾选其中一个)
+    // 只要 Notify 想要开启左手 或 右手
     // 我们就开启金箍棒
     if (bEnableLeft || bEnableRight)
     {
@@ -265,7 +259,7 @@ void AEnemyBoss::EnableWeaponCollision(bool bEnableLeft, bool bEnableRight)
 // 重写关闭逻辑
 void AEnemyBoss::DisableWeaponCollision()
 {
-    // 调用父类是为了保险 (虽然 Boss 没有左右手碰撞盒，但调用一下无妨)
+    // 调用父类保险
     AEnemies::DisableWeaponCollision();
 
     // 关闭金箍棒
@@ -278,7 +272,7 @@ void AEnemyBoss::SetStaffCollision(bool bActive)
 
     if (bActive)
     {
-        HitActors.Empty(); // 清空受击列表 (使用父类定义的 HitActors)
+        HitActors.Empty(); // 清空受击列表
         WeaponCollisionStaff->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
     }
     else
@@ -301,14 +295,11 @@ void AEnemyBoss::OnStaffOverlap(UPrimitiveComponent* OverlappedComponent, AActor
         // 造成伤害
         UGameplayStatics::ApplyDamage(
             OtherActor,
-            BaseDamage, // 此时可能已经是二阶段强化过的伤害
+            BaseDamage, // 二阶段强化过的伤害
             GetController(),
             this,
             UDamageType::StaticClass()
         );
-
-        // 播放打击音效或特效 (Wukong 金箍棒打击感)
-        // UGameplayStatics::SpawnEmitterAtLocation(...);
     }
 }
 
@@ -336,8 +327,6 @@ void AEnemyBoss::DisableInvincibility()
         UBehaviorTreeComponent* BTComp = Cast<UBehaviorTreeComponent>(AIC->GetBrainComponent());
         if (BTComp)
         {
-            // 如果你知道行为树资源，可以用 StartTree
-            // 如果之前已经在运行，RestartTree 也是可行的
             BTComp->RestartTree();
         }
     }
@@ -349,9 +338,6 @@ void AEnemyBoss::SpawnPhaseTwoMinions()
 {
     // 确保 Boss 还没死
     if (bIsDead) return;
-
-    // 播放烟雾特效 (移到这里，分身出来时才有烟雾)
-    UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), nullptr, GetActorLocation());
 
     // 生成 2 个分身
     SummonClones(2);
@@ -371,7 +357,7 @@ void AEnemyBoss::HandleDeath()
     {
         KillAllMinions();
 
-        // 新增逻辑：处理游戏胜利 UI
+        // 处理游戏胜利 UI
         if (VictoryWidgetClass)
         {
             // 定义一个定时器句柄
@@ -381,7 +367,7 @@ void AEnemyBoss::HandleDeath()
             UWorld* World = GetWorld();
             if (World)
             {
-                // 设置定时器，延迟 3.0 秒执行（给 Boss 留出播放死亡动画的时间）
+                // 设置定时器，延迟执行
                 World->GetTimerManager().SetTimer(TimerHandle_Victory, [this]()
                     {
                         // 再次检查 World 是否有效 (防止切换关卡导致崩坏)
@@ -407,17 +393,14 @@ void AEnemyBoss::HandleDeath()
                                 InputMode.SetWidgetToFocus(VictoryWidget->TakeWidget());
                                 InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
                                 PC->SetInputMode(InputMode);
-
-                                // (可选) 如果你想让游戏暂停
-                                // UGameplayStatics::SetGamePaused(GetWorld(), true);
                             }
                         }
-                    }, 3.0f, false); // 3.0f 是延迟时间，可根据动画长度调整
+                    }, 3.0f, false); // 延迟时间，可根据动画长度调整
             }
         }
     }
 
-    // 2. [关键] 必须调用父类的逻辑，执行原本的死亡动画、碰撞关闭等
+    // 2. 必须调用父类的逻辑，执行原本的死亡动画、碰撞关闭等
     AEnemies::HandleDeath();
 }
 
@@ -429,19 +412,16 @@ void AEnemyBoss::KillAllMinions()
         // 检查指针是否有效，且分身还没死
         if (Minion && !Minion->IsDead())
         {
-            // 方法一：直接造成巨额伤害 (推荐)
+            // 直接造成巨额伤害
             // 这样做的好处是会触发分身自己的 TakeDamage -> HandleDeath 流程
             // 分身会播放死亡动画，而不是突然消失
             UGameplayStatics::ApplyDamage(
                 Minion,
                 99999.f,             // 巨额伤害
-                nullptr,     // 凶手是本体的控制器
-                nullptr,                // 凶手是本体
+                nullptr,    
+                nullptr,
                 UDamageType::StaticClass()
             );
-
-            // 方法二：如果你想让分身直接消失，不播动画
-            // Minion->Destroy();
         }
     }
 

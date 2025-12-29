@@ -1,6 +1,3 @@
- // Fill out your copyright notice in the Description page of Project Settings.
-
-
 #include "SparrowProjectile.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "Components/SphereComponent.h"
@@ -70,8 +67,6 @@ void ASparrowProjectile::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor,
             this,
             UDamageType::StaticClass()
         );
-
-        // 这里可以播放击中特效 (SpawnEmitterAtLocation) 或 音效 (PlaySoundAtLocation)
 
         // 销毁箭矢
         Destroy();
